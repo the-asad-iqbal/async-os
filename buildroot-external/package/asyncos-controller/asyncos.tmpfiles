@@ -1,0 +1,3 @@
+# Controller state (database, setup code, extra device profiles).
+d /mnt/data/asyncos 0750 asyncos asyncos -
+d /mnt/data/asyncos/profiles 0750 asyncos asyncos -

@@ -74,6 +74,14 @@ row "Hostname" "${hostname}"
 print_addresses "IPv4" 4
 print_addresses "IPv6" 6
 row "Dashboard" "${A}http://${hostname}.local${R}"
+
+# Until the first owner account exists, show the one-time setup code. It
+# proves physical access to whoever finishes setup in the browser.
+setup_code="$(cat /mnt/data/asyncos/setup-code 2>/dev/null)"
+if [ -n "${setup_code}" ]; then
+    printf "\n"
+    row "Setup code" "${W}${setup_code}${R}  ${M}enter it in the web UI to create the owner account${R}"
+fi
 if [ "$1" = "--console" ]; then
     printf "\n%bOpen the dashboard in a browser to manage this controller. Press Enter to refresh.%b\n" "${M}" "${R}"
 fi

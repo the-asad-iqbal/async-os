@@ -1,0 +1,8 @@
+BOARD_ID=generic-x86-64-kiosk
+BOARD_NAME="Generic x86-64 Kiosk"
+CHASSIS=embedded
+BOOTLOADER=grub
+KERNEL_FILE=bzImage
+PARTITION_TABLE_TYPE=gpt
+BOOT_SIZE=32M
+BOOT_SPL=false

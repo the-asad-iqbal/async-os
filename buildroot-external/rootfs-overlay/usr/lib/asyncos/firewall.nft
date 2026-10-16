@@ -1,0 +1,42 @@
+#!/usr/sbin/nft -f
+# AsyncOS firewall: deny inbound by default.
+# Outbound is open: the controller initiates every Modbus connection.
+
+flush ruleset
+
+table inet asyncos {
+	chain input {
+		type filter hook input priority filter; policy drop;
+
+		iif "lo" accept
+		ct state established,related accept
+		ct state invalid drop
+
+		# Neighbour discovery and ping
+		meta l4proto ipv6-icmp accept
+		meta l4proto icmp accept
+
+		# Address configuration
+		udp sport 67 udp dport 68 accept
+		udp sport 547 udp dport 546 accept
+
+		# asyncos.local name resolution
+		udp dport 5353 accept
+		udp dport 5355 accept
+		tcp dport 5355 accept
+
+		# Web UI and API
+		tcp dport 80 accept
+
+		# SSH, only listening when keys were imported
+		tcp dport 22222 accept
+
+		# Refuse the rest politely, so tools fail fast instead of hanging
+		meta l4proto tcp reject with tcp reset
+		reject
+	}
+
+	chain forward {
+		type filter hook forward priority filter; policy drop;
+	}
+}

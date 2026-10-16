@@ -5,6 +5,11 @@
     "architecture": "x86-64"
   },
   {
+    "id": "generic-x86-64-kiosk",
+    "defconfig": "generic_x86_64_kiosk",
+    "architecture": "x86-64"
+  },
+  {
     "id": "ova",
     "defconfig": "ova",
     "architecture": "x86-64"

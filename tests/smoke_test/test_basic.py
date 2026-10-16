@@ -98,3 +98,16 @@ def test_kernel_not_tainted(shell):
     test suite to increase the chance of catching issues."""
     output = shell.run_check("cat /proc/sys/kernel/tainted")
     assert "\n".join(output) == "0", f"Kernel tainted: {output}"
+
+
+@pytest.mark.dependency(depends=["test_init"])
+def test_controller_running(shell):
+    output = shell.run_check("systemctl is-active asyncos-controller.service")
+    assert output == ["active"], f"Controller not running: {output}"
+    health = shell.run_check("curl -fsS http://127.0.0.1/api/v1/health")
+    assert '"status":"ok"' in "".join(health), f"Unexpected health response: {health}"
+
+
+def test_firewall_loaded(shell):
+    output = shell.run_check("nft list table inet asyncos")
+    assert "policy drop" in "\n".join(output), f"Firewall not loaded: {output}"

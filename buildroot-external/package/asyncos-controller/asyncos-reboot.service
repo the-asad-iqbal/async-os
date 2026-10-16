@@ -1,0 +1,9 @@
+[Unit]
+Description=Reboot requested by the AsyncOS controller
+
+[Service]
+Type=oneshot
+# The controller runs unprivileged; it requests a reboot by creating a
+# file, and only this unit acts on it.
+ExecStartPre=/bin/rm -f /run/asyncos/reboot
+ExecStart=/usr/bin/systemctl reboot

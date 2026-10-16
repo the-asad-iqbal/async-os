@@ -1,0 +1,39 @@
+[Unit]
+Description=AsyncOS kiosk display on the local screen
+# Only when a display adapter exists; headless boxes keep the text console.
+ConditionPathExistsGlob=/dev/dri/card*
+After=asyncos-controller.service systemd-user-sessions.service systemd-udev-settle.service
+Wants=asyncos-controller.service
+# Takes over the first console from the text status screen.
+Conflicts=asyncos-console@tty1.service getty@tty1.service
+OnFailure=asyncos-console@tty1.service
+
+[Service]
+User=kiosk
+Group=kiosk
+SupplementaryGroups=video input render
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+StandardInput=tty-fail
+StandardOutput=journal
+UtmpIdentifier=tty1
+Environment=XDG_RUNTIME_DIR=/run/asyncos-kiosk
+RuntimeDirectory=asyncos-kiosk
+RuntimeDirectoryMode=0700
+ExecStart=/usr/bin/cog --platform=drm --webprocess-failure=restart --enable-write-console-messages-to-stdout=false http://127.0.0.1/kiosk
+Restart=always
+RestartSec=3
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+
+[Install]
+WantedBy=multi-user.target

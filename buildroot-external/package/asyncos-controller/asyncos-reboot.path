@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch for reboot requests from the AsyncOS controller
+
+[Path]
+PathExists=/run/asyncos/reboot
+Unit=asyncos-reboot.service
+
+[Install]
+WantedBy=multi-user.target

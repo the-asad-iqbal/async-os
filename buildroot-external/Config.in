@@ -1,3 +1,5 @@
+source "$BR2_EXTERNAL_ASYNCOS_PATH/package/asyncos-controller/Config.in"
+source "$BR2_EXTERNAL_ASYNCOS_PATH/package/asyncos-kiosk/Config.in"
 source "$BR2_EXTERNAL_ASYNCOS_PATH/package/qemu-guest-agent/Config.in"
 source "$BR2_EXTERNAL_ASYNCOS_PATH/package/lxd-guest-agent/Config.in"
 source "$BR2_EXTERNAL_ASYNCOS_PATH/package/rtl88x2bu/Config.in"

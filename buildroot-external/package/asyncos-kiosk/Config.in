@@ -1,0 +1,12 @@
+config BR2_PACKAGE_ASYNCOS_KIOSK
+	bool "AsyncOS kiosk display"
+	depends on BR2_PACKAGE_ASYNCOS_CONTROLLER
+	depends on BR2_PACKAGE_COG_PLATFORM_DRM
+	help
+	  Shows the AsyncOS wall display full screen on the device's own
+	  monitor, using the WPE WebKit browser (cog) directly on
+	  DRM/KMS without a desktop. The controller gives this local
+	  screen read-only access without a login.
+
+comment "AsyncOS kiosk needs the AsyncOS controller and cog with the DRM backend"
+	depends on !BR2_PACKAGE_ASYNCOS_CONTROLLER || !BR2_PACKAGE_COG_PLATFORM_DRM

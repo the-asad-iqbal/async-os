@@ -1,0 +1,9 @@
+config BR2_PACKAGE_ASYNCOS_CONTROLLER
+	bool "AsyncOS controller"
+	depends on BR2_PACKAGE_HOST_GO_TARGET_ARCH_SUPPORTS
+	depends on BR2_INIT_SYSTEMD
+	select BR2_PACKAGE_HOST_GO
+	help
+	  The AsyncOS PV, genset and export-limit controller: Modbus
+	  device polling, the control loop, energy statistics, users
+	  and roles, and the web UI on port 80.

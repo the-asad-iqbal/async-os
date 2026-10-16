@@ -40,6 +40,7 @@ func main() {
 	profilesDir := flag.String("profiles", "", "extra device profiles (default <data>/profiles)")
 	demo := flag.String("demo", "", `run against a simulated site: "grid" or "hybrid"`)
 	localDisplay := flag.Bool("local-display", false, "give the device's own kiosk screen (loopback, no session) read-only access")
+	rebootRequest := flag.String("reboot-request", "", "request reboots by creating this file (watched by a privileged unit) instead of calling systemctl")
 	debug := flag.Bool("debug", false, "verbose logging")
 	flag.Parse()
 
@@ -48,13 +49,18 @@ func main() {
 		level = slog.LevelDebug
 	}
 	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
-	if err := run(log, *listen, *dataDir, *profilesDir, *demo, *localDisplay); err != nil {
+	reboot := func() error { return exec.Command("systemctl", "reboot").Run() }
+	if *rebootRequest != "" {
+		path := *rebootRequest
+		reboot = func() error { return os.WriteFile(path, []byte("reboot\n"), 0o644) }
+	}
+	if err := run(log, *listen, *dataDir, *profilesDir, *demo, *localDisplay, reboot); err != nil {
 		log.Error("controller stopped", "error", err)
 		os.Exit(1)
 	}
 }
 
-func run(log *slog.Logger, listen, dataDir, profilesDir, demo string, localDisplay bool) error {
+func run(log *slog.Logger, listen, dataDir, profilesDir, demo string, localDisplay bool, reboot func() error) error {
 	if err := os.MkdirAll(dataDir, 0o750); err != nil {
 		return err
 	}

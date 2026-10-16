@@ -1,0 +1,54 @@
+# AsyncOS controller checks
+
+name: Controller
+
+on:
+  push:
+    paths:
+      - "controller/**"
+      - ".github/workflows/controller.yaml"
+  pull_request:
+    paths:
+      - "controller/**"
+      - ".github/workflows/controller.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Vet and test
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: controller
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: controller/go.mod
+
+      - name: Check formatting
+        run: |
+          unformatted="$(git ls-files -z '*.go' ':!:vendor' | xargs -0 gofmt -l)"
+          test -z "${unformatted}" || { echo "Not gofmt-ed: ${unformatted}"; exit 1; }
+
+      - name: Check vendored modules are in sync
+        run: go mod vendor && git diff --exit-code -- vendor go.mod go.sum
+
+      - name: Vet
+        run: go vet -mod=vendor ./...
+
+      - name: Test
+        run: go test -mod=vendor -race -count=1 ./...
+
+      - name: Check UI scripts
+        run: git ls-files -z 'web/static/assets/*.js' | xargs -0 -n1 node --check
+
+      - name: Build
+        run: CGO_ENABLED=0 go build -mod=vendor -trimpath -o asyncos-controller ./cmd/asyncos-controller
