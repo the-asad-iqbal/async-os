@@ -23,6 +23,7 @@ import (
 
 const (
 	sessionCookie = "asyncos_session"
+	displayCookie = "asyncos_display"
 	// csrfHeader must accompany every state-changing request. Browsers
 	// cannot add custom headers to cross-site requests without a CORS
 	// preflight, which this server never approves.
@@ -42,6 +43,10 @@ type Deps struct {
 	Web      fs.FS
 	Version  string
 	Log      *slog.Logger
+	// LocalDisplay grants read-only display access to loopback requests
+	// without a session: the kiosk browser on the device's own screen.
+	// Off unless that kiosk is installed.
+	LocalDisplay bool
 }
 
 // Server is the HTTP handler.
@@ -79,6 +84,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/v1/auth/login", s.public(s.login))
 
 	// Any signed-in user.
+	s.mux.HandleFunc("POST /api/v1/kiosk/claim", s.public(s.claimDisplay))
 	s.handle("POST /api/v1/auth/logout", "", s.logout)
 	s.handle("GET /api/v1/auth/me", "", s.me)
 	s.handle("POST /api/v1/auth/password", "", s.changePassword)
@@ -107,6 +113,9 @@ func (s *Server) routes() {
 	s.handle("PATCH /api/v1/users/{id}", auth.PermUsersManage, s.updateUser)
 	s.handle("DELETE /api/v1/users/{id}", auth.PermUsersManage, s.deleteUser)
 	s.handle("POST /api/v1/users/{id}/password", auth.PermUsersManage, s.resetPassword)
+	s.handle("GET /api/v1/displays", auth.PermUsersManage, s.listDisplays)
+	s.handle("POST /api/v1/displays", auth.PermUsersManage, s.createDisplay)
+	s.handle("DELETE /api/v1/displays/{id}", auth.PermUsersManage, s.revokeDisplay)
 
 	s.mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "no such endpoint")
@@ -173,15 +182,10 @@ func (s *Server) handle(pattern string, perm auth.Permission, h handlerFunc) {
 			writeError(w, http.StatusForbidden, "missing "+csrfHeader+" header")
 			return
 		}
-		cookie, err := r.Cookie(sessionCookie)
-		if err != nil {
-			writeError(w, http.StatusUnauthorized, "sign in required")
-			return
-		}
-		u, err := s.Auth.Authenticate(cookie.Value)
+		u, err := s.principal(r)
 		if err != nil {
 			clearSessionCookie(w, r)
-			writeError(w, http.StatusUnauthorized, "session expired, sign in again")
+			writeError(w, http.StatusUnauthorized, "sign in required")
 			return
 		}
 		if perm != "" && !u.Role.Can(perm) {
@@ -190,6 +194,26 @@ func (s *Server) handle(pattern string, perm auth.Permission, h handlerFunc) {
 		}
 		s.respond(w, r, h(w, r, &u))
 	})
+}
+
+// principal resolves who is calling: a signed-in user, a display link, or
+// the device's own screen (loopback requests without a session), which
+// gets read-only display access.
+func (s *Server) principal(r *http.Request) (auth.User, error) {
+	if c, err := r.Cookie(sessionCookie); err == nil {
+		return s.Auth.Authenticate(c.Value)
+	}
+	if c, err := r.Cookie(displayCookie); err == nil {
+		d, err := s.Auth.AuthenticateDisplay(c.Value)
+		if err != nil {
+			return auth.User{}, err
+		}
+		return auth.DisplayUser(d.ID, d.Name), nil
+	}
+	if ip := net.ParseIP(clientIP(r)); s.LocalDisplay && ip != nil && ip.IsLoopback() {
+		return auth.DisplayUser("local", "Device screen"), nil
+	}
+	return auth.User{}, auth.ErrSessionInvalid
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

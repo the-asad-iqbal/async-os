@@ -208,7 +208,7 @@ func (s *Service) newUser(tx *bolt.Tx, username, displayName string, role Role, 
 	if !usernamePattern.MatchString(username) {
 		return User{}, ErrInvalidUsername
 	}
-	if !role.Valid() {
+	if !role.Assignable() {
 		return User{}, ErrInvalidRole
 	}
 	if err := checkPasswordPolicy(username, password); err != nil {
@@ -416,7 +416,7 @@ func (s *Service) UpdateUser(id string, c UserChanges) (User, error) {
 			u.DisplayName = name
 		}
 		if c.Role != nil && *c.Role != u.Role {
-			if !c.Role.Valid() {
+			if !c.Role.Assignable() {
 				return ErrInvalidRole
 			}
 			if u.Role == RoleOwner && !u.Disabled {

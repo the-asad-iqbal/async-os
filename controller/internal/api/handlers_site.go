@@ -30,7 +30,6 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request, _ *auth.User) erro
 	if !ok {
 		return errorf(http.StatusInternalServerError, "streaming unsupported")
 	}
-	cookie, _ := r.Cookie(sessionCookie)
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Accel-Buffering", "no")
@@ -71,7 +70,7 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request, _ *auth.User) erro
 			}
 			flusher.Flush()
 		case <-recheck.C:
-			u, err := s.Auth.Authenticate(cookie.Value)
+			u, err := s.principal(r)
 			if err != nil || !u.Role.Can(auth.PermDashboardView) {
 				fmt.Fprint(w, "event: signed_out\ndata: {}\n\n")
 				flusher.Flush()

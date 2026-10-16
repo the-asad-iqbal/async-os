@@ -25,6 +25,7 @@ import (
 type testEnv struct {
 	t        *testing.T
 	server   *httptest.Server
+	srv      *Server
 	auth     *auth.Service
 	codePath string
 }
@@ -57,7 +58,7 @@ func newEnv(t *testing.T) *testEnv {
 	})
 	hs := httptest.NewServer(srv)
 	t.Cleanup(hs.Close)
-	return &testEnv{t: t, server: hs, auth: authService, codePath: codePath}
+	return &testEnv{t: t, server: hs, srv: srv, auth: authService, codePath: codePath}
 }
 
 // client is a browser with its own cookie jar.
@@ -314,5 +315,55 @@ func TestUIIsServedForClientRoutes(t *testing.T) {
 	}
 	if status, _ := env.client().do("GET", "/api/v1/nope", nil); status != http.StatusNotFound {
 		t.Fatalf("unknown API path: %d", status)
+	}
+}
+
+func TestDisplayLinksGiveReadOnlyAccess(t *testing.T) {
+	env := newEnv(t)
+	owner := env.setupOwner()
+	status, body := owner.do("POST", "/api/v1/displays", map[string]string{"name": "Control room"})
+	if status != http.StatusCreated {
+		t.Fatalf("create display: %d %s", status, body)
+	}
+	var created struct {
+		Display auth.Display `json:"display"`
+		Token   string       `json:"token"`
+	}
+	json.Unmarshal(body, &created)
+
+	screen := env.client()
+	if status, _ := screen.do("POST", "/api/v1/kiosk/claim", map[string]string{"token": created.Token}); status != 200 {
+		t.Fatalf("claim: %d", status)
+	}
+	if status, _ := screen.do("GET", "/api/v1/snapshot", nil); status != 200 {
+		t.Fatalf("display cannot read the dashboard: %d", status)
+	}
+	if status, _ := screen.do("GET", "/api/v1/site", nil); status != http.StatusForbidden {
+		t.Fatalf("display read the site configuration: %d", status)
+	}
+	if status, _ := screen.do("PUT", "/api/v1/site/export-limit", map[string]float64{"export_limit_w": 1}); status != http.StatusForbidden {
+		t.Fatalf("display changed a setpoint: %d", status)
+	}
+
+	owner.do("DELETE", "/api/v1/displays/"+created.Display.ID, nil)
+	if status, _ := screen.do("GET", "/api/v1/snapshot", nil); status != http.StatusUnauthorized {
+		t.Fatalf("revoked display still works: %d", status)
+	}
+	if status, _ := env.client().do("POST", "/api/v1/kiosk/claim", map[string]string{"token": "forged"}); status != http.StatusUnauthorized {
+		t.Fatalf("forged token claimed: %d", status)
+	}
+}
+
+func TestLocalDisplayIsOptIn(t *testing.T) {
+	env := newEnv(t)
+	if status, _ := env.client().do("GET", "/api/v1/snapshot", nil); status != http.StatusUnauthorized {
+		t.Fatalf("loopback trusted by default: %d", status)
+	}
+	env.srv.LocalDisplay = true
+	if status, _ := env.client().do("GET", "/api/v1/snapshot", nil); status != 200 {
+		t.Fatalf("local display denied: %d", status)
+	}
+	if status, _ := env.client().do("GET", "/api/v1/site", nil); status != http.StatusForbidden {
+		t.Fatalf("local display read the configuration: %d", status)
 	}
 }

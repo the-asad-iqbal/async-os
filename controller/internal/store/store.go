@@ -17,6 +17,7 @@ var (
 	BucketMeta     = []byte("meta")
 	BucketUsers    = []byte("users")
 	BucketSessions = []byte("sessions")
+	BucketDisplays = []byte("displays")
 	BucketAudit    = []byte("audit")
 	BucketStats5m  = []byte("stats_5m")
 	BucketStats1h  = []byte("stats_1h")
@@ -37,7 +38,7 @@ func Open(path string) (*Store, error) {
 		return nil, fmt.Errorf("open database %s: %w", path, err)
 	}
 	err = db.Update(func(tx *bolt.Tx) error {
-		for _, b := range [][]byte{BucketMeta, BucketUsers, BucketSessions, BucketAudit, BucketStats5m, BucketStats1h} {
+		for _, b := range [][]byte{BucketMeta, BucketUsers, BucketSessions, BucketDisplays, BucketAudit, BucketStats5m, BucketStats1h} {
 			if _, err := tx.CreateBucketIfNotExists(b); err != nil {
 				return err
 			}

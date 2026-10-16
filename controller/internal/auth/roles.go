@@ -12,6 +12,9 @@ const (
 	RoleOperator  Role = "operator"
 	RoleInstaller Role = "installer"
 	RoleOwner     Role = "owner"
+	// RoleDisplay is read-only access for kiosk screens. It belongs to
+	// display links and the device's own screen, never to a user account.
+	RoleDisplay Role = "display"
 )
 
 // Permission is one action a role may take.
@@ -38,7 +41,8 @@ const (
 )
 
 var rolePermissions = map[Role][]Permission{
-	RoleViewer: {PermDashboardView, PermEnergyView, PermDevicesView, PermAlarmsView},
+	RoleDisplay: {PermDashboardView, PermEnergyView},
+	RoleViewer:  {PermDashboardView, PermEnergyView, PermDevicesView, PermAlarmsView},
 	RoleOperator: {PermDashboardView, PermEnergyView, PermDevicesView, PermAlarmsView,
 		PermAlarmsAck, PermControlSetpoint},
 	RoleInstaller: {PermDashboardView, PermEnergyView, PermDevicesView, PermAlarmsView,
@@ -55,6 +59,9 @@ func (r Role) Valid() bool {
 	_, ok := rolePermissions[r]
 	return ok
 }
+
+// Assignable reports whether r can be given to a user account.
+func (r Role) Assignable() bool { return r.Valid() && r != RoleDisplay }
 
 // Can reports whether the role grants p.
 func (r Role) Can(p Permission) bool {

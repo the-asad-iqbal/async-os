@@ -39,6 +39,7 @@ func main() {
 	dataDir := flag.String("data", "/var/lib/asyncos", "directory for the database and setup code")
 	profilesDir := flag.String("profiles", "", "extra device profiles (default <data>/profiles)")
 	demo := flag.String("demo", "", `run against a simulated site: "grid" or "hybrid"`)
+	localDisplay := flag.Bool("local-display", false, "give the device's own kiosk screen (loopback, no session) read-only access")
 	debug := flag.Bool("debug", false, "verbose logging")
 	flag.Parse()
 
@@ -47,13 +48,13 @@ func main() {
 		level = slog.LevelDebug
 	}
 	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
-	if err := run(log, *listen, *dataDir, *profilesDir, *demo); err != nil {
+	if err := run(log, *listen, *dataDir, *profilesDir, *demo, *localDisplay); err != nil {
 		log.Error("controller stopped", "error", err)
 		os.Exit(1)
 	}
 }
 
-func run(log *slog.Logger, listen, dataDir, profilesDir, demo string) error {
+func run(log *slog.Logger, listen, dataDir, profilesDir, demo string, localDisplay bool) error {
 	if err := os.MkdirAll(dataDir, 0o750); err != nil {
 		return err
 	}
@@ -114,10 +115,11 @@ func run(log *slog.Logger, listen, dataDir, profilesDir, demo string) error {
 		SaveSite: func(s plant.Site) error {
 			return db.Update(func(tx *bolt.Tx) error { return store.PutJSON(tx, store.BucketMeta, siteKey, s) })
 		},
-		Reboot:  func() error { return exec.Command("systemctl", "reboot").Run() },
-		Web:     web.FS(),
-		Version: version,
-		Log:     log,
+		Reboot:       func() error { return exec.Command("systemctl", "reboot").Run() },
+		Web:          web.FS(),
+		Version:      version,
+		Log:          log,
+		LocalDisplay: localDisplay,
 	})
 
 	engineDone := make(chan struct{})

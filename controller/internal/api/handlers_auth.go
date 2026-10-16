@@ -80,6 +80,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request, u *auth.User) er
 		}
 	}
 	clearSessionCookie(w, r)
+	http.SetCookie(w, &http.Cookie{Name: displayCookie, Value: "", Path: "/", HttpOnly: true, Secure: r.TLS != nil, SameSite: http.SameSiteStrictMode, MaxAge: -1})
 	s.record(r, u, "auth.logout", u.Username, nil, nil)
 	w.WriteHeader(http.StatusNoContent)
 	return nil
@@ -215,4 +216,68 @@ func userError(err error) error {
 		// Validation messages from the service are safe to show.
 		return errorf(http.StatusBadRequest, "%v", err)
 	}
+}
+
+// claimDisplay turns a display link token into a long-lived, read-only
+// cookie for a kiosk screen.
+func (s *Server) claimDisplay(w http.ResponseWriter, r *http.Request, _ *auth.User) error {
+	var req struct {
+		Token string `json:"token"`
+	}
+	if err := decode(w, r, &req); err != nil {
+		return err
+	}
+	d, err := s.Auth.AuthenticateDisplay(req.Token)
+	if err != nil {
+		s.record(r, nil, "display.claim", "", nil, err)
+		return errorf(http.StatusUnauthorized, "%v", err)
+	}
+	u := auth.DisplayUser(d.ID, d.Name)
+	s.record(r, &u, "display.claim", d.Name, nil, nil)
+	http.SetCookie(w, &http.Cookie{
+		Name: displayCookie, Value: req.Token, Path: "/", HttpOnly: true, Secure: r.TLS != nil,
+		SameSite: http.SameSiteStrictMode, MaxAge: 400 * 24 * 3600,
+	})
+	writeJSON(w, http.StatusOK, u.Public())
+	return nil
+}
+
+func (s *Server) listDisplays(w http.ResponseWriter, _ *http.Request, _ *auth.User) error {
+	displays, err := s.Auth.ListDisplays()
+	if err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, displays)
+	return nil
+}
+
+func (s *Server) createDisplay(w http.ResponseWriter, r *http.Request, u *auth.User) error {
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := decode(w, r, &req); err != nil {
+		return err
+	}
+	d, token, err := s.Auth.CreateDisplay(req.Name, u.Username)
+	s.record(r, u, "display.create", req.Name, nil, err)
+	if err != nil {
+		return errorf(http.StatusBadRequest, "%v", err)
+	}
+	// The token is shown once; only its hash is stored.
+	writeJSON(w, http.StatusCreated, map[string]any{"display": d, "token": token})
+	return nil
+}
+
+func (s *Server) revokeDisplay(w http.ResponseWriter, r *http.Request, u *auth.User) error {
+	id := r.PathValue("id")
+	err := s.Auth.RevokeDisplay(id)
+	s.record(r, u, "display.revoke", id, nil, err)
+	if errors.Is(err, auth.ErrDisplayNotFound) {
+		return errorf(http.StatusNotFound, "%v", err)
+	}
+	if err != nil {
+		return err
+	}
+	w.WriteHeader(http.StatusNoContent)
+	return nil
 }

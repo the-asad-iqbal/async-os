@@ -250,3 +250,28 @@ func TestPasswordHashFormat(t *testing.T) {
 		t.Fatal("garbage hash verified")
 	}
 }
+
+func TestDisplayLinks(t *testing.T) {
+	s := newService(t)
+	d, token, err := s.CreateDisplay("Control room TV", "owner")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.AuthenticateDisplay(token)
+	if err != nil || got.ID != d.ID {
+		t.Fatalf("authenticate display: %v %v", got, err)
+	}
+	if err := s.RevokeDisplay(d.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AuthenticateDisplay(token); !errors.Is(err, ErrDisplayNotFound) {
+		t.Fatal("revoked display still works")
+	}
+	if RoleDisplay.Can(PermAlarmsAck) || !RoleDisplay.Can(PermDashboardView) {
+		t.Fatal("display role permissions wrong")
+	}
+	setupOwner(t, s)
+	if _, err := s.CreateUser("wallscreen", "", RoleDisplay, "a long password here"); !errors.Is(err, ErrInvalidRole) {
+		t.Fatal("display role assigned to a user")
+	}
+}
