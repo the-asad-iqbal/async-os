@@ -422,6 +422,12 @@ button[data-tip], a[data-tip] { cursor: pointer; }
 .kiosk-body { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 20px; min-height: 0; }
 .kiosk-side { display: grid; gap: 20px; align-content: start; }
 .kiosk .flow > svg { max-height: 60vh; }
+/* The card is laid out in fixed pixels; zoom scales it with its lines. */
+.kiosk-body > .card { display: flex; flex-direction: column; }
+.kiosk-body > .card > .flow { flex: 1; display: grid; place-items: center; }
+@media (min-width: 1200px) { .kiosk .flow-card { zoom: 1.3; } }
+@media (min-width: 1800px) { .kiosk .flow-card { zoom: 1.7; } }
+@media (min-width: 2400px) { .kiosk .flow-card { zoom: 2.2; } }
 .kiosk .big-number { font-size: clamp(36px, 5vw, 64px); }
 .kiosk .kpi .value { font-size: clamp(22px, 2.4vw, 34px); }
 .kiosk-foot { display: flex; align-items: center; gap: 12px; color: var(--muted-foreground); font-size: 13px; }
@@ -430,65 +436,6 @@ button[data-tip], a[data-tip] { cursor: pointer; }
   .kiosk-body { grid-template-columns: 1fr; }
 }
 
-/* Power Flow Card Plus (Home Assistant card) theme bridge.
-   The card paints itself from Home Assistant energy-theme custom properties.
-   Without them every ring, icon and flow line resolves to "unset" (black or
-   no stroke), which is why the card looked nothing like the original. Map them
-   onto the AsyncOS palette so the card renders with its intended colours. */
-power-flow-card-plus {
-  --primary-text-color: #09090b;
-  --secondary-text-color: #71717a;
-  --primary-color: #5b5cf6;
-  --card-background-color: #ffffff;
-  --divider-color: #e4e4e7;
-
-  --energy-solar-color: #f59e0b;
-  --energy-grid-consumption-color: #5b5cf6;
-  --energy-grid-return-color: #06b6d4;
-  --energy-battery-in-color: #f43f5e;
-  --energy-battery-out-color: #f43f5e;
-  --energy-non-fossil-color: #16a34a;
-  --non-fossil-color: #16a34a;
-
-  /* The card derives its icon/text colours from these. Set them explicitly so
-     the rings, glyphs and flow lines all match. */
-  --icon-solar-color: #f59e0b;
-  --icon-grid-color: #5b5cf6;
-  --icon-home-color: #5b5cf6;
-  --icon-battery-color: #f43f5e;
-  --icon-non-fossil-color: #16a34a;
-  --cirlce-grid-color: #5b5cf6;
-  --circle-battery-color: #f43f5e;
-  --battery-grid-line: #06b6d4;
-  --text-solar-color: #09090b;
-  --text-grid-consumption-color: #5b5cf6;
-  --text-grid-return-color: #06b6d4;
-  --text-battery-in-color: #f43f5e;
-  --text-battery-out-color: #f43f5e;
-  --text-home-color: #09090b;
-  --text-non-fossil-color: #09090b;
-
-  display: block;
-  color: #09090b;
-}
-
-@media (prefers-color-scheme: dark) {
-  power-flow-card-plus {
-    --primary-text-color: #fafafa;
-    --secondary-text-color: #a1a1aa;
-    --card-background-color: #09090b;
-    --divider-color: #27272a;
-
-    --energy-grid-consumption-color: #7e7ff9;
-    --icon-grid-color: #7e7ff9;
-    --icon-home-color: #7e7ff9;
-    --cirlce-grid-color: #7e7ff9;
-    --text-grid-consumption-color: #7e7ff9;
-
-    --text-solar-color: #fafafa;
-    --text-home-color: #fafafa;
-    --text-non-fossil-color: #fafafa;
-
-    color: #fafafa;
-  }
-}
+/* Power Flow Card Plus. Its theme is set inline by lib/flowcard.js, because
+   the card's own :host rule would win over anything here. */
+.flow-card { display: block; width: 100%; max-width: 520px; margin: 0 auto; color: var(--foreground); }

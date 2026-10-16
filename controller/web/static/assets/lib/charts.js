@@ -109,7 +109,9 @@ export function lineChart({ series, points, height = 240, format, timeFormat, xM
     axis.append(s('line', { class: v === 0 ? 'zero' : 'gridline', x1: pad.l, x2: width - pad.r, y1: y(v), y2: y(v), 'vector-effect': 'non-scaling-stroke' }));
     axis.append(s('text', { x: pad.l - 8, y: y(v) + 4, 'text-anchor': 'end' }, format(v)));
   }
-  const ticks = Math.max(2, Math.min(6, Math.floor(width / 110)));
+  // Space ticks by the widest label, so "09:39:58 AM" never collides.
+  const labelW = Math.max(timeFormat(t0).length, timeFormat(t1).length) * 7 + 24;
+  const ticks = Math.max(1, Math.min(6, Math.floor((width - pad.l - pad.r) / labelW)));
   for (let i = 0; i <= ticks; i++) {
     const t = t0 + ((t1 - t0) * i) / ticks;
     axis.append(s('text', { x: x(t), y: height - 6, 'text-anchor': i === 0 ? 'start' : i === ticks ? 'end' : 'middle' }, timeFormat(t)));

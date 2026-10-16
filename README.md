@@ -58,7 +58,7 @@ cd controller
 go run ./cmd/asyncos-controller -demo hybrid -listen 127.0.0.1:8080 -data ./tmp
 ```
 
-Open `http://127.0.0.1:8080` and enter the setup code from `./tmp/setup-code`. The `hybrid` scenario alternates grid operation with genset-backed outages; `grid` is grid-only.
+Open `http://127.0.0.1:8080` and enter the setup code from `./tmp/setup-code`. The `hybrid` scenario alternates grid operation with genset-backed outages; `grid` is grid-only; `ats` puts one meter behind an ATS and splits its energy into grid and genset totals.
 
 ```bash
 go test -race ./...
@@ -82,4 +82,4 @@ Development builds sign updates with a key generated at build time and trust onl
 
 ## Upstream and license
 
-AsyncOS is derived from [Home Assistant Operating System](https://github.com/home-assistant/operating-system) and is distributed under the [Apache License 2.0](LICENSE). It is an independent project, not affiliated with or endorsed by Home Assistant or the Open Home Foundation. The Inter typeface is used under the SIL Open Font License.
+AsyncOS is derived from [Home Assistant Operating System](https://github.com/home-assistant/operating-system) and is distributed under the [Apache License 2.0](LICENSE). It is an independent project, not affiliated with or endorsed by Home Assistant or the Open Home Foundation. The Inter typeface is used under the SIL Open Font License. The power flow diagram is [Power Flow Card Plus](https://github.com/flixlix/power-flow-card-plus) (MIT), vendored in `controller/web/static/assets/`.

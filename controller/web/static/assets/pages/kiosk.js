@@ -6,6 +6,7 @@ import { logoMark } from '../lib/icons.js';
 import * as live from '../lib/live.js';
 import * as fmt from '../lib/format.js';
 import { colors, statusPill, pill } from '../lib/ui.js';
+import { mountFlow } from '../lib/flowcard.js';
 import { renderControl, renderFlow, renderToday } from './overview.js';
 
 export async function render(root, { can }) {
@@ -41,11 +42,12 @@ export async function render(root, { can }) {
   tick();
   const clock = setInterval(tick, 1000);
 
+  const updateFlow = await mountFlow(flow, (el, snap) => renderFlow(el, snap, c));
   live.connect(() => location.reload());
   const unsubscribe = live.subscribe((snap, meta) => {
     title.textContent = snap.site_name || 'AsyncOS';
     replace(status, statusPill(snap.decision?.status));
-    renderFlow(flow, snap, c);
+    updateFlow(snap);
     renderControl(control, snap, () => false);
     replace(connection, meta?.stale ? pill('Reconnecting…', 'warn') : pill('Live', 'ok'));
     updated.textContent = `Updated ${fmt.time(snap.time)}`;
