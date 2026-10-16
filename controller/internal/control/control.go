@@ -121,8 +121,10 @@ type Meter struct {
 	// PowerW: grid meters positive when importing from the grid; genset
 	// meters positive when the genset supplies the site.
 	PowerW float64
-	// VoltageV is the highest phase voltage, or 0 when not measured.
-	VoltageV float64
+	// VoltageV is the highest phase voltage; only meaningful when
+	// HasVoltage is set.
+	VoltageV   float64
+	HasVoltage bool
 }
 
 // Genset is a genset with its output meter.
@@ -199,7 +201,7 @@ type Decision struct {
 
 	// HeadroomW is how much more PV the site could absorb (negative:
 	// how much must be shed). NaN when no constraint is active.
-	HeadroomW float64 `json:"headroom_w"`
+	HeadroomW float64 `json:"-"`
 	// Binding names the constraint that set the limit: "grid", "genset"
 	// or "" when none did.
 	Binding string `json:"binding"`
@@ -260,7 +262,7 @@ func Step(s Settings, m Measurements, state *State) Decision {
 			failsafe = "Grid meter is not responding"
 			d.Alarms = append(d.Alarms, Alarm{Code: AlarmGridMeterOffline, Device: m.Grid.ID, Critical: true, Message: failsafe})
 		} else {
-			d.GridPresent = s.GridPresentMinVoltage == 0 || m.Grid.VoltageV == 0 || m.Grid.VoltageV >= s.GridPresentMinVoltage
+			d.GridPresent = s.GridPresentMinVoltage == 0 || !m.Grid.HasVoltage || m.Grid.VoltageV >= s.GridPresentMinVoltage
 			if d.GridPresent {
 				// Import + allowed export - margin.
 				h := m.Grid.PowerW + s.ExportLimitW - s.GridMarginW

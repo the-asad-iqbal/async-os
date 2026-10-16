@@ -15,7 +15,7 @@ func controlSettings() Settings {
 }
 
 func grid(powerW float64, at time.Time) *Meter {
-	return &Meter{ID: "grid", Online: true, Updated: at, PowerW: powerW, VoltageV: 230}
+	return &Meter{ID: "grid", Online: true, Updated: at, PowerW: powerW, VoltageV: 230, HasVoltage: true}
 }
 
 func inverter(id string, powerW, ratedW float64, at time.Time) Inverter {
@@ -29,6 +29,17 @@ func hasAlarm(d Decision, code string) bool {
 		}
 	}
 	return false
+}
+
+func TestGridWithoutVoltageReadingCountsAsPresent(t *testing.T) {
+	s := controlSettings()
+	var st State
+	g := grid(1000, t0)
+	g.VoltageV, g.HasVoltage = 0, false
+	d := Step(s, Measurements{Now: t0, Grid: g, Inverters: []Inverter{inverter("inv", 0, 10000, t0)}}, &st)
+	if !d.GridPresent {
+		t.Fatal("a meter without voltage points should not report a grid outage")
+	}
 }
 
 func TestDefaultSettingsAreValid(t *testing.T) {
@@ -264,7 +275,7 @@ func TestGridOutageWithoutGensetRaisesNoSource(t *testing.T) {
 	s := controlSettings()
 	var st State
 	g := grid(0, t0)
-	g.VoltageV = 3
+	g.VoltageV = 0 // measured: the grid is down
 	d := Step(s, Measurements{Now: t0, Grid: g, Inverters: []Inverter{inverter("inv", 0, 10000, t0)}}, &st)
 	if d.GridPresent || !hasAlarm(d, AlarmNoSource) {
 		t.Fatalf("decision = %+v", d)

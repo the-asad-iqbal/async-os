@@ -152,6 +152,12 @@ func (s *SunSpecMeterSim) SetPower(watt float64) {
 	s.bank.SetHolding(s.unitID, s.model203+16, raw(watt), raw(watt/3), raw(watt/3), raw(watt/3))
 }
 
+// SetVoltage sets all three phase voltages.
+func (s *SunSpecMeterSim) SetVoltage(volt float64) {
+	raw := uint16(int16(math.Round(volt * 10)))
+	s.bank.SetHolding(s.unitID, s.model203+6, raw, raw, raw)
+}
+
 // SetEnergy sets the import and export counters in kWh.
 func (s *SunSpecMeterSim) SetEnergy(importKWh, exportKWh float64) {
 	put := func(offset uint16, kwh float64) {
