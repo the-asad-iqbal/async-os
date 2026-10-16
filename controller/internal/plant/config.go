@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/the-asad-iqbal/async-os/controller/internal/control"
@@ -63,6 +64,8 @@ type Site struct {
 	Buses    []Bus            `json:"buses"`
 	Devices  []DeviceConfig   `json:"devices"`
 	Control  control.Settings `json:"control"`
+	// OperatorExportLimitMaxW bounds the export limit operators may set.
+	OperatorExportLimitMaxW float64 `json:"operator_export_limit_max_w"`
 }
 
 // DefaultSite is an empty site in monitor mode.
@@ -70,7 +73,40 @@ func DefaultSite() Site {
 	return Site{Name: "My site", Timezone: "UTC", Buses: []Bus{}, Devices: []DeviceConfig{}, Control: control.DefaultSettings()}
 }
 
-var configID = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,31}$`)
+var (
+	configID = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,31}$`)
+	// Only real serial ports may be opened as a bus.
+	serialDevice = regexp.MustCompile(`^/dev/(tty[A-Za-z0-9]+|serial/by-(id|path)/[A-Za-z0-9._:+-]+)$`)
+)
+
+// Validate checks one bus's connection settings.
+func (b Bus) Validate() error {
+	if b.TimeoutMS < 100 || b.TimeoutMS > 10000 {
+		return errors.New("timeout must be 100 to 10000 ms")
+	}
+	switch b.Transport {
+	case "tcp", "rtuovertcp":
+		if b.Host == "" || len(b.Host) > 253 || strings.ContainsAny(b.Host, "/ ") || b.Port < 1 || b.Port > 65535 {
+			return errors.New("a valid host and port are required")
+		}
+	case "rtu":
+		if !serialDevice.MatchString(b.Device) {
+			return fmt.Errorf("serial device %q must be /dev/tty* or /dev/serial/by-id/*", b.Device)
+		}
+		if b.BaudRate < 300 || b.BaudRate > 921600 {
+			return errors.New("baud rate must be 300 to 921600")
+		}
+		if b.Parity != "N" && b.Parity != "E" && b.Parity != "O" {
+			return errors.New("parity must be N, E or O")
+		}
+		if b.StopBits != 1 && b.StopBits != 2 {
+			return errors.New("stop bits must be 1 or 2")
+		}
+	default:
+		return errors.New("transport must be tcp, rtuovertcp or rtu")
+	}
+	return nil
+}
 
 // Validate checks the site against the device library.
 func (s *Site) Validate(lib *devices.Library) error {
@@ -80,6 +116,9 @@ func (s *Site) Validate(lib *devices.Library) error {
 	}
 	if _, err := time.LoadLocation(s.Timezone); err != nil {
 		errs = append(errs, fmt.Errorf("unknown time zone %q", s.Timezone))
+	}
+	if s.OperatorExportLimitMaxW < 0 {
+		errs = append(errs, errors.New("operator export limit bound cannot be negative"))
 	}
 	if err := s.Control.Validate(); err != nil {
 		errs = append(errs, fmt.Errorf("control: %w", err))
@@ -94,26 +133,8 @@ func (s *Site) Validate(lib *devices.Library) error {
 			errs = append(errs, fmt.Errorf("bus id %q is used twice", b.ID))
 		}
 		buses[b.ID] = b
-		if b.TimeoutMS < 100 || b.TimeoutMS > 10000 {
-			errs = append(errs, fmt.Errorf("bus %q: timeout must be 100 to 10000 ms", b.ID))
-		}
-		switch b.Transport {
-		case "tcp", "rtuovertcp":
-			if b.Host == "" || b.Port < 1 || b.Port > 65535 {
-				errs = append(errs, fmt.Errorf("bus %q: host and port are required", b.ID))
-			}
-		case "rtu":
-			if b.Device == "" || b.BaudRate <= 0 {
-				errs = append(errs, fmt.Errorf("bus %q: serial device and baud rate are required", b.ID))
-			}
-			if b.Parity != "N" && b.Parity != "E" && b.Parity != "O" {
-				errs = append(errs, fmt.Errorf("bus %q: parity must be N, E or O", b.ID))
-			}
-			if b.StopBits != 1 && b.StopBits != 2 {
-				errs = append(errs, fmt.Errorf("bus %q: stop bits must be 1 or 2", b.ID))
-			}
-		default:
-			errs = append(errs, fmt.Errorf("bus %q: transport must be tcp, rtuovertcp or rtu", b.ID))
+		if err := b.Validate(); err != nil {
+			errs = append(errs, fmt.Errorf("bus %q: %w", b.ID, err))
 		}
 	}
 

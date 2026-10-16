@@ -526,3 +526,65 @@ func (e *Engine) Subscribe() (<-chan Snapshot, func()) {
 		e.snapMu.Unlock()
 	}
 }
+
+// withClient runs fn with a client for bus: the running one when the bus
+// is in use with identical settings (a serial port cannot be opened
+// twice), otherwise a temporary one.
+func (e *Engine) withClient(bus Bus, fn func(*modbus.Client) error) error {
+	if err := bus.Validate(); err != nil {
+		return err
+	}
+	e.mu.Lock()
+	var shared *modbus.Client
+	for _, b := range e.site.Buses {
+		if b == bus {
+			shared = e.clients[b.ID]
+		}
+	}
+	e.mu.Unlock()
+	if shared != nil {
+		return fn(shared)
+	}
+	temp := modbus.NewClient(transportFor(bus))
+	defer temp.Close()
+	return fn(temp)
+}
+
+// Probe reads a device once with the given settings, for commissioning.
+func (e *Engine) Probe(ctx context.Context, bus Bus, cfg DeviceConfig) (devices.Reading, bool, error) {
+	profile, ok := e.lib.Get(cfg.Profile)
+	if !ok {
+		return nil, false, fmt.Errorf("unknown profile %q", cfg.Profile)
+	}
+	if cfg.UnitID < 1 || cfg.UnitID > 247 {
+		return nil, false, fmt.Errorf("unit ID must be 1 to 247")
+	}
+	var reading devices.Reading
+	controllable := false
+	err := e.withClient(bus, func(c *modbus.Client) error {
+		d := devices.NewDevice(profile, c, byte(cfg.UnitID))
+		var err error
+		reading, err = d.Read(ctx)
+		controllable = err == nil && d.HasControl(devices.ControlPowerLimit)
+		return err
+	})
+	return reading, controllable, err
+}
+
+// ReadRaw reads registers directly, for commissioning.
+func (e *Engine) ReadRaw(ctx context.Context, bus Bus, unitID int, table devices.Table, address, quantity uint16) ([]uint16, error) {
+	if unitID < 1 || unitID > 247 {
+		return nil, fmt.Errorf("unit ID must be 1 to 247")
+	}
+	var values []uint16
+	err := e.withClient(bus, func(c *modbus.Client) error {
+		var err error
+		if table == devices.TableInput {
+			values, err = c.ReadInputRegisters(ctx, byte(unitID), address, quantity)
+		} else {
+			values, err = c.ReadHoldingRegisters(ctx, byte(unitID), address, quantity)
+		}
+		return err
+	})
+	return values, err
+}
