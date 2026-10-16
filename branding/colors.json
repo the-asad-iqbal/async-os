@@ -1,0 +1,50 @@
+{
+  "$comment": "AsyncOS color tokens. Single source of truth for the OS console, docs and the upcoming UI.",
+  "brand": {
+    "indigo": {
+      "50": "#EEF0FF",
+      "100": "#E0E2FF",
+      "200": "#C4C6FE",
+      "300": "#A2A3FC",
+      "400": "#7E7FF9",
+      "500": "#6B6CF8",
+      "600": "#5B5CF6",
+      "700": "#4A47E8",
+      "800": "#3F3BD9",
+      "900": "#2A2690"
+    },
+    "pulse": {
+      "300": "#67E8F9",
+      "400": "#22D3EE",
+      "600": "#0891B2"
+    }
+  },
+  "neutral": {
+    "ink": "#0B1020",
+    "slate-700": "#334155",
+    "slate-500": "#64748B",
+    "slate-300": "#CBD5E1",
+    "mist": "#F5F7FB",
+    "white": "#FFFFFF"
+  },
+  "status": {
+    "success": "#16A34A",
+    "warning": "#F59E0B",
+    "danger": "#EF4444"
+  },
+  "semantic": {
+    "primary": "brand.indigo.600",
+    "primary-hover": "brand.indigo.700",
+    "accent": "brand.pulse.400",
+    "background": "neutral.white",
+    "surface": "neutral.mist",
+    "foreground": "neutral.ink",
+    "muted-foreground": "neutral.slate-500"
+  },
+  "terminal": {
+    "$comment": "xterm-256 approximations; the Linux VT maps these to its 16-color palette.",
+    "primary": "38;5;63",
+    "accent": "38;5;45",
+    "muted": "38;5;245"
+  }
+}

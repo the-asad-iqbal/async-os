@@ -1,5 +1,5 @@
 [Unit]
-Description=HAOS persists data on bootstate
+Description=AsyncOS persists data on bootstate
 After=sysinit.target
 RefuseManualStart=true
 RefuseManualStop=true

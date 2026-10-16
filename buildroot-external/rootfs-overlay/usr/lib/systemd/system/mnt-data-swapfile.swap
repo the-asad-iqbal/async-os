@@ -1,5 +1,5 @@
 [Unit]
-Description=HAOS swap file
+Description=AsyncOS swap file
 ConditionFileNotEmpty=/mnt/data/swapfile
 
 [Swap]

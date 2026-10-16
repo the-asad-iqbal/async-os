@@ -3,7 +3,7 @@ set -e
 
 BUILDER_UID="$(id -u)"
 BUILDER_GID="$(id -g)"
-CACHE_DIR="${CACHE_DIR:-$HOME/hassos-cache}"
+CACHE_DIR="${CACHE_DIR:-$HOME/asyncos-cache}"
 
 if [ "$BUILDER_UID" -eq "0" ] || [ "$BUILDER_GID" == "0" ]; then
   echo "ERROR: Please run this script as a regular (non-root) user with sudo privileges."
@@ -11,7 +11,7 @@ if [ "$BUILDER_UID" -eq "0" ] || [ "$BUILDER_GID" == "0" ]; then
 fi
 
 mkdir -p "${CACHE_DIR}"
-docker build -t hassos:local .
+docker build -t asyncos:local .
 
 if [ ! -f buildroot/Makefile ]; then
   # Initialize git submodule
@@ -33,4 +33,4 @@ docker run --rm --privileged \
   ${TTY_OPTS} \
   -v "$(pwd):/build" -v "${CACHE_DIR}:/cache" \
   -e BUILDER_UID="${BUILDER_UID}" -e BUILDER_GID="${BUILDER_GID}" \
-  hassos:local "${@:-bash}"
+  asyncos:local "${@:-bash}"

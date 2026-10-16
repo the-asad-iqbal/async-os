@@ -7,7 +7,7 @@ function haos_pre_image() {
 
     mkdir -p "${BOOT_DATA}/EFI/BOOT"
 
-    cp "${BOARD_DIR}/../grub.cfg" "${EFIPART_DATA}/EFI/BOOT/grub.cfg"
+    cp "${BOARD_DIR}/grub.cfg" "${EFIPART_DATA}/EFI/BOOT/grub.cfg"
     cp "${BOARD_DIR}/cmdline.txt" "${EFIPART_DATA}/cmdline.txt"
     grub-editenv "${EFIPART_DATA}/EFI/BOOT/grubenv" create
     grub-editenv "${EFIPART_DATA}/EFI/BOOT/grubenv" set ORDER="A B"
@@ -19,24 +19,23 @@ function haos_pre_image() {
 
 
 function haos_post_image() {
-    local hdd_img="$(haos_image_name img)"
+    local hdd_img="$(os_image_name img)"
+    local hdd_img_orig="$(os_image_name img.orig)"
 
-    # Virtual Disk images
+    # Resize for VM images, preserving original
+    cp "$hdd_img" "$hdd_img_orig"
     resize_disk_image_virtual 32G
 
+    # Create VM archives
     convert_disk_image_virtual vmdk
-    convert_disk_image_virtual vhdx
     convert_disk_image_virtual vdi
     convert_disk_image_virtual qcow2
 
     convert_disk_image_zip vmdk
-    convert_disk_image_zip vhdx
     convert_disk_image_zip vdi
     convert_disk_image_xz qcow2
 
-    # OVA
-    convert_disk_image_ova
-
-    # Cleanup
-    rm -f "${hdd_img}"
+    # Use unresized image for .img.xz
+    mv "$hdd_img_orig" "$hdd_img"
+    convert_disk_image_xz
 }

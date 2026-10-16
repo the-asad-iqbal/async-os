@@ -1,5 +1,5 @@
 [Unit]
-Description=HAOS config partition
+Description=AsyncOS config partition
 
 [Mount]
 What=/dev/disk/by-label/CONFIG

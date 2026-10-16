@@ -1,5 +1,5 @@
 [Unit]
-Description=HAOS data resizing
+Description=AsyncOS data resizing
 DefaultDependencies=no
 Before=mnt-data.mount
 RefuseManualStart=true

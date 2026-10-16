@@ -1,5 +1,5 @@
 [Unit]
-Description=HAOS hardware targets
+Description=AsyncOS hardware targets
 Documentation=man:systemd.target(5)
 
 [Install]

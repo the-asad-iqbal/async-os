@@ -2,7 +2,13 @@ VERSION_MAJOR="18"
 VERSION_MINOR="4"
 VERSION_SUFFIX="dev0"
 
-HAOS_NAME="Home Assistant OS"
-HAOS_ID="haos"
+# Product identity. Brand assets and colors live in /branding.
+OS_NAME="AsyncOS"
+OS_ID="asyncos"
+OS_VENDOR="asyncos"
+OS_HOME_URL="https://github.com/the-asad-iqbal/async-os"
+OS_BUG_REPORT_URL="https://github.com/the-asad-iqbal/async-os/issues"
+# Brand indigo for systemd's boot banner (see branding/colors.json "terminal")
+OS_ANSI_COLOR="1;38;5;63"
 
 DEPLOYMENT="development"

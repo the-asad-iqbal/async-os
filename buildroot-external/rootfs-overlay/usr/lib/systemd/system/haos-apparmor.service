@@ -1,5 +1,5 @@
 [Unit]
-Description=HAOS AppArmor
+Description=AsyncOS AppArmor
 Wants=network-online.target time-sync.target
 After=network-online.target time-sync.target
 Before=docker.service

@@ -1,5 +1,5 @@
 [Unit]
-Description=HAOS data partition
+Description=AsyncOS data partition
 Wants=haos-expand.service
 DefaultDependencies=no
 After=haos-expand.service

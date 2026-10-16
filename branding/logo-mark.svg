@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="AsyncOS">
+  <defs>
+    <linearGradient id="asyncos-bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6B6CF8"/>
+      <stop offset="1" stop-color="#3F3BD9"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#asyncos-bg)"/>
+  <!-- Two independent strokes that never touch: the "async" A. -->
+  <path d="M18 47 L29.5 17 M34.5 17 L46 47" fill="none" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="32" cy="37" r="3.75" fill="#22D3EE"/>
+</svg>

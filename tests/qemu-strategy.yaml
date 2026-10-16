@@ -13,7 +13,7 @@ targets:
           disk: disk-image
           bios: bios
       - CustomTimeoutShellDriver:
-          login_prompt: 'homeassistant login: '
+          login_prompt: 'asyncos login: '
           username: 'root'
           prompt: '# '
           login_timeout: 300
@@ -24,7 +24,7 @@ tools:
   qemu-x86_64: /usr/bin/qemu-system-x86_64
 
 images:
-  disk-image: ./haos.qcow2
+  disk-image: ./asyncos.qcow2
   bios: /usr/share/ovmf/OVMF.fd
 
 

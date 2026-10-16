@@ -1,4 +1,4 @@
-# Home Assistant Operating System build workflow
+# AsyncOS build workflow
 
 name: OS build
 
@@ -73,7 +73,7 @@ jobs:
       channel: ${{ steps.channel.outputs.channel }}
       hassio_channel_option: ${{ steps.channel.outputs.hassio_channel_option }}
       matrix: ${{ steps.generate_matrix.outputs.result }}
-      build_container_image: ghcr.io/${{ github.repository_owner }}/haos-builder@${{ steps.build_haos_builder.outputs.digest }}
+      build_container_image: ghcr.io/${{ github.repository_owner }}/asyncos-builder@${{ steps.build_asyncos_builder.outputs.digest }}
       publish_build: ${{ steps.check_publish.outputs.publish_build }}
       self_signed_cert: ${{ steps.generate_signing_key.outputs.self_signed_cert }}
     steps:
@@ -243,13 +243,13 @@ jobs:
             password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and Push
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        id: build_haos_builder
+        id: build_asyncos_builder
         with:
           context: .
           file: Dockerfile
-          tags: ghcr.io/${{ github.repository_owner }}/haos-builder
-          cache-from: ghcr.io/${{ github.repository_owner }}/haos-builder:cache-${{ steps.version.outputs.version_main }}
-          cache-to: ghcr.io/${{ github.repository_owner }}/haos-builder:cache-${{ steps.version.outputs.version_main }}
+          tags: ghcr.io/${{ github.repository_owner }}/asyncos-builder
+          cache-from: ghcr.io/${{ github.repository_owner }}/asyncos-builder:cache-${{ steps.version.outputs.version_main }}
+          cache-to: ghcr.io/${{ github.repository_owner }}/asyncos-builder:cache-${{ steps.version.outputs.version_main }}
           push: true
 
       - name: Generate self-signed certificate
@@ -351,30 +351,30 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: /mnt/cache/cc
-          key: haos-cc-${{ matrix.board.id }}
+          key: asyncos-cc-${{ matrix.board.id }}
 
       - name: Generate build config
-        uses: "./.github/actions/haos-builder-command"
+        uses: "./.github/actions/asyncos-builder-command"
         with:
           image: ${{ needs.prepare.outputs.build_container_image }}
           command: make ${{ matrix.board.defconfig }}_defconfig
 
       - name: Override release channel
         if: ${{ needs.prepare.outputs.hassio_channel_option != 'BR2_PACKAGE_HASSIO_CHANNEL_STABLE' }}
-        uses: "./.github/actions/haos-builder-command"
+        uses: "./.github/actions/asyncos-builder-command"
         with:
           image: ${{ needs.prepare.outputs.build_container_image }}
           command: |
             bash -c 'echo "${{ needs.prepare.outputs.hassio_channel_option }}=y" >> /build/output/.config && make olddefconfig'
 
       - name: Build
-        uses: "./.github/actions/haos-builder-command"
+        uses: "./.github/actions/asyncos-builder-command"
         with:
           image: ${{ needs.prepare.outputs.build_container_image }}
           command: make
 
       - name: Check Linux config
-        uses: "./.github/actions/haos-builder-command"
+        uses: "./.github/actions/asyncos-builder-command"
         with:
           image: ${{ needs.prepare.outputs.build_container_image }}
           command: |
@@ -383,7 +383,7 @@ jobs:
       - name: Compute image digests
         if: ${{ github.event_name == 'release' || needs.prepare.outputs.publish_build == 'true' }}
         working-directory: output/images/
-        run: sha256sum haos_* > SHA256SUMS.${{ matrix.board.id }}
+        run: sha256sum asyncos_* > SHA256SUMS.${{ matrix.board.id }}
 
       - name: Upload image digests artifact
         if: ${{ github.event_name == 'release' || needs.prepare.outputs.publish_build == 'true' }}
@@ -403,7 +403,7 @@ jobs:
             ./ \
             s3://${{ secrets.R2_OS_ARTIFACTS_BUCKET }}/${{ needs.prepare.outputs.version_full }}/ \
             --exclude "*" \
-            --include "haos_*" \
+            --include "asyncos_*" \
             --endpoint-url ${{ secrets.R2_OS_ARTIFACTS_ENDPOINT }}
 
       - name: Upload release assets
@@ -411,7 +411,7 @@ jobs:
         uses: shogo82148/actions-upload-release-asset@9ee13965a8a51926f330b424693f25fcff8f2ef6 # v1.10.6
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: output/images/haos_*
+          asset_path: output/images/asyncos_*
 
       - name: Print cache stats
         run: |
@@ -426,7 +426,7 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: /mnt/cache/cc
-          key: haos-cc-${{ matrix.board.id }}-${{ github.run_id }}
+          key: asyncos-cc-${{ matrix.board.id }}-${{ github.run_id }}
 
       - name: Generate build summary
         env:
@@ -448,7 +448,7 @@ jobs:
           echo "## Artifacts" >> $GITHUB_STEP_SUMMARY
           echo "| File | Size (bytes) | Size (formatted) |" >> $GITHUB_STEP_SUMMARY
           echo "|:-|:-|:-|" >> $GITHUB_STEP_SUMMARY
-          for f in output/images/haos_*; do
+          for f in output/images/asyncos_*; do
             echo "| $(basename $f) | $(du -b $f | cut -f1) | $(du -bh $f | cut -f1) |" >> $GITHUB_STEP_SUMMARY
           done
           echo "## Partitions" >> $GITHUB_STEP_SUMMARY
@@ -463,27 +463,27 @@ jobs:
         if: ${{ github.event_name != 'release' && needs.prepare.outputs.publish_build != 'true' && matrix.board.id != 'ova' }}
         with:
           archive: false
-          name: haos_${{ matrix.board.id }}-${{ needs.prepare.outputs.version_full }}.img.xz
+          name: asyncos_${{ matrix.board.id }}-${{ needs.prepare.outputs.version_full }}.img.xz
           path: |
-            output/images/haos_${{ matrix.board.id }}-${{ needs.prepare.outputs.version_full }}.img.xz
+            output/images/asyncos_${{ matrix.board.id }}-${{ needs.prepare.outputs.version_full }}.img.xz
 
       - name: Upload RAUC bundle artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ github.event_name != 'release' && needs.prepare.outputs.publish_build != 'true' }}
         with:
           archive: false
-          name: haos_${{ matrix.board.id }}-${{ needs.prepare.outputs.version_full }}.raucb
+          name: asyncos_${{ matrix.board.id }}-${{ needs.prepare.outputs.version_full }}.raucb
           path: |
-            output/images/haos_${{ matrix.board.id }}-${{ needs.prepare.outputs.version_full }}.raucb
+            output/images/asyncos_${{ matrix.board.id }}-${{ needs.prepare.outputs.version_full }}.raucb
 
       - name: Upload Open Virtualization Format (OVA) artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ github.event_name != 'release' && needs.prepare.outputs.publish_build != 'true' && matrix.board.id == 'ova' }}
         with:
           archive: false
-          name: haos_${{ matrix.board.id }}-${{ needs.prepare.outputs.version_full }}.ova
+          name: asyncos_${{ matrix.board.id }}-${{ needs.prepare.outputs.version_full }}.ova
           path: |
-            output/images/haos_${{ matrix.board.id }}-${{ needs.prepare.outputs.version_full }}.ova
+            output/images/asyncos_${{ matrix.board.id }}-${{ needs.prepare.outputs.version_full }}.ova
 
       - name: Upload QEMU disk image artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -491,36 +491,36 @@ jobs:
         if: ${{ matrix.board.id == 'ova' || (github.event_name != 'release' && needs.prepare.outputs.publish_build != 'true' && matrix.board.id == 'generic-aarch64') }}
         with:
           archive: false
-          name: haos_${{ matrix.board.id }}-${{ needs.prepare.outputs.version_full }}.qcow2.xz
+          name: asyncos_${{ matrix.board.id }}-${{ needs.prepare.outputs.version_full }}.qcow2.xz
           path: |
-            output/images/haos_${{ matrix.board.id }}-${{ needs.prepare.outputs.version_full }}.qcow2.xz
+            output/images/asyncos_${{ matrix.board.id }}-${{ needs.prepare.outputs.version_full }}.qcow2.xz
 
       - name: Upload VMware Virtual Machine Disk (VMDK) artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ github.event_name != 'release' && needs.prepare.outputs.publish_build != 'true' && (matrix.board.id == 'generic-aarch64' || matrix.board.id == 'ova') }}
         with:
           archive: false
-          name: haos_${{ matrix.board.id }}-${{ needs.prepare.outputs.version_full }}.vmdk.zip
+          name: asyncos_${{ matrix.board.id }}-${{ needs.prepare.outputs.version_full }}.vmdk.zip
           path: |
-            output/images/haos_${{ matrix.board.id }}-${{ needs.prepare.outputs.version_full }}.vmdk.zip
+            output/images/asyncos_${{ matrix.board.id }}-${{ needs.prepare.outputs.version_full }}.vmdk.zip
 
       - name: Upload VirtualBox Virtual Disk Image (VDI) artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ github.event_name != 'release' && needs.prepare.outputs.publish_build != 'true' && matrix.board.id == 'ova' }}
         with:
           archive: false
-          name: haos_${{ matrix.board.id }}-${{ needs.prepare.outputs.version_full }}.vdi.zip
+          name: asyncos_${{ matrix.board.id }}-${{ needs.prepare.outputs.version_full }}.vdi.zip
           path: |
-            output/images/haos_${{ matrix.board.id }}-${{ needs.prepare.outputs.version_full }}.vdi.zip
+            output/images/asyncos_${{ matrix.board.id }}-${{ needs.prepare.outputs.version_full }}.vdi.zip
 
       - name: Upload Virtual Hard Disk v2 (VHDX) artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ github.event_name != 'release' && needs.prepare.outputs.publish_build != 'true' && matrix.board.id == 'ova' }}
         with:
           archive: false
-          name: haos_${{ matrix.board.id }}-${{ needs.prepare.outputs.version_full }}.vhdx.zip
+          name: asyncos_${{ matrix.board.id }}-${{ needs.prepare.outputs.version_full }}.vhdx.zip
           path: |
-            output/images/haos_${{ matrix.board.id }}-${{ needs.prepare.outputs.version_full }}.vhdx.zip
+            output/images/asyncos_${{ matrix.board.id }}-${{ needs.prepare.outputs.version_full }}.vhdx.zip
 
   test:
     name: Test OS image
@@ -626,20 +626,20 @@ jobs:
         email: ${{ secrets.GIT_EMAIL }}
         token: ${{ secrets.GIT_TOKEN }}
 
-    - name: Bump Home Assistant OS ${{ needs.prepare.outputs.channel }} channel version
+    - name: Bump AsyncOS ${{ needs.prepare.outputs.channel }} channel version
       uses: home-assistant/actions/helpers/version-push@master
       with:
         key: "hassos[]"
-        key-description: "Home Assistant OS"
+        key-description: "AsyncOS"
         version: ${{ needs.prepare.outputs.version_full }}
         channel: ${{ needs.prepare.outputs.channel }}
 
-    - name: Bump Home Assistant OS beta channel version on stable release
+    - name: Bump AsyncOS beta channel version on stable release
       if: ${{ needs.prepare.outputs.channel == 'stable' }}
       uses: home-assistant/actions/helpers/version-push@master
       with:
         key: "hassos[]"
-        key-description: "Home Assistant OS"
+        key-description: "AsyncOS"
         version: ${{ needs.prepare.outputs.version_full }}
         channel: beta
 

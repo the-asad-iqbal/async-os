@@ -1,5 +1,5 @@
 [Unit]
-Description=HAOS supervisor
+Description=AsyncOS supervisor
 Requires=docker.service rauc.service dbus.socket
 Wants=network-online.target haos-apparmor.service time-sync.target systemd-journal-gatewayd.socket
 After=docker.service rauc.service dbus.socket network-online.target haos-apparmor.service time-sync.target systemd-journal-gatewayd.socket

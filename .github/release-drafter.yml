@@ -1,8 +1,8 @@
-name-template: Home Assistant OS $RESOLVED_VERSION
+name-template: AsyncOS $RESOLVED_VERSION
 tag-template: $RESOLVED_VERSION
 version-template: "$MAJOR.$MINOR"
 categories:
-  - title: 'Home Assistant Operating System'
+  - title: 'AsyncOS'
     label: 'os'
   - title: 'Raspberry Pi'
     label: 'board/raspberrypi'

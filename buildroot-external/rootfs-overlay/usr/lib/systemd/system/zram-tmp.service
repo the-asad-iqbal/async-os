@@ -1,5 +1,5 @@
 [Unit]
-Description=HAOS ZRAM tmp
+Description=AsyncOS ZRAM tmp
 DefaultDependencies=no
 Before=tmp.mount
 RefuseManualStart=true

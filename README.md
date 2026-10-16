@@ -1,57 +1,66 @@
-# Home Assistant Operating System
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="branding/logo-inverse.svg">
+    <img src="branding/logo.svg" alt="AsyncOS" width="248">
+  </picture>
+</p>
 
-Home Assistant Operating System (formerly HassOS) is a Linux based operating system optimized to host [Home Assistant](https://www.home-assistant.io) and its [Apps](https://www.home-assistant.io/apps/).
+<p align="center">A lean, appliance-grade Linux operating system for single-board computers, mini PCs and virtual machines.</p>
 
-Home Assistant Operating System uses Docker as its container engine. By default it deploys the Home Assistant Supervisor as a container. Home Assistant Supervisor in turn uses the Docker container engine to control Home Assistant Core and Apps in separate containers. Home Assistant Operating System is **not** based on a regular Linux distribution like Ubuntu. It is built using [Buildroot](https://buildroot.org/) and it is optimized to run Home Assistant. It targets single board compute (SBC) devices like the Raspberry Pi or ODROID but also supports x86-64 systems with UEFI.
+---
 
-[![Home Assistant - A project from the Open Home Foundation](https://www.openhomefoundation.org/badges/home-assistant.png)](https://www.openhomefoundation.org/)
+AsyncOS is a minimal Linux distribution built with [Buildroot](https://buildroot.org/). It is not based on a general-purpose distribution like Debian or Ubuntu: every image is assembled from source, boots from a read-only root file system, and updates itself atomically over the air.
 
 ## Features
 
-- Lightweight and memory-efficient
-- Minimized I/O
-- Over The Air (OTA) updates
-- Offline updates
-- Modular using Docker container engine
+- **Small and fast** – a read-only EROFS root file system and ZRAM-backed `/tmp`, `/var` and swap keep memory use and disk I/O low.
+- **Atomic A/B updates** – [RAUC](https://rauc.io/) installs updates to the inactive slot and falls back automatically if a new version fails to boot. Offline updates via USB work too.
+- **Container native** – workloads run as containers on [Docker Engine](https://docs.docker.com/engine/).
+- **Secure by default** – [AppArmor](https://apparmor.net/) confinement and signed update bundles.
 
 ## Supported hardware
 
-The list of supported hardware is defined by [ADR-0015](https://github.com/home-assistant/architecture/blob/master/adr/0015-home-assistant-os.md).
-Every new hardware addition must meet at least requirements defined in [ADR-0017](https://github.com/home-assistant/architecture/blob/master/adr/0017-hardware-screening-os.md) and pass through an architecture design proposal.
+| Board ID          | Hardware                                    |
+| ----------------- | ------------------------------------------- |
+| `generic-x86-64`  | UEFI-capable x86-64 PCs                     |
+| `generic-aarch64` | UEFI-capable aarch64 systems                |
+| `ova`             | Virtual machines (OVA, qcow2, VDI, VHDX, VMDK) |
+| `rpi3-64`, `rpi4-64`, `rpi5-64` | Raspberry Pi 3, 4/400, 5      |
+| `odroid-c2`, `odroid-c4`, `odroid-n2`, `odroid-m1`, `odroid-m1s` | Hardkernel ODROID |
+| `khadas-vim3`     | Khadas VIM3                                 |
+| `green`, `yellow` | Home Assistant Green and Yellow hardware    |
 
-For documentation explaining details of the individual supported boards, see [Board support](https://developers.home-assistant.io/docs/operating-system/boards/overview) section of the Home Assistant Developer Docs.
+Kernel versions per board are listed in [Documentation/kernel.md](Documentation/kernel.md).
 
-## Getting Started
+## Building
 
-If you just want to use Home Assistant the official [getting started guide](https://www.home-assistant.io/getting-started/) and [installation instructions](https://www.home-assistant.io/hassio/installation/) take you through how to download Home Assistant Operating System and get it running on your machine.
+Builds run inside a container so the only host requirement is Docker.
 
-If you're interested in finding out more about Home Assistant Operating System and how it works read on...
+```bash
+git clone --recurse-submodules https://github.com/the-asad-iqbal/async-os.git
+cd async-os
+scripts/enter.sh make ova          # or any target from buildroot-external/configs
+```
 
-## Development
+Images land in `output/images/` and are named `asyncos_<board>-<version>.<ext>`.
 
-If you don't have experience with embedded systems, Buildroot or the build process for Linux distributions it is recommended to read up on these topics first (e.g. [Bootlin](https://bootlin.com/docs/) has excellent resources).
+Run `scripts/enter.sh make help` to list every target.
 
-The Home Assistant Operating System documentation can be found on the [Home Assistant Developer Docs website](https://developers.home-assistant.io/docs/operating-system).
+## Components
 
-### Components
+| Layer          | Choice                                                                                  |
+| -------------- | --------------------------------------------------------------------------------------- |
+| Bootloader     | [GRUB](https://www.gnu.org/software/grub/) on UEFI, [U-Boot](https://u-boot.org/) elsewhere |
+| Base system    | [Buildroot](https://buildroot.org/) LTS, systemd                                        |
+| File systems   | EROFS (read-only root), ext4 (data), ZRAM for `/tmp`, `/var` and swap                   |
+| Containers     | [Docker Engine](https://docs.docker.com/engine/)                                        |
+| Updates        | [RAUC](https://rauc.io/) A/B slots, OTA and USB                                          |
+| Security       | [AppArmor](https://apparmor.net/)                                                        |
 
-- **Bootloader:**
-  - [GRUB](https://www.gnu.org/software/grub/) for devices that support UEFI
-  - [U-Boot](https://www.denx.de/wiki/U-Boot) for devices that don't support UEFI
-- **Operating System:**
-  - [Buildroot](https://buildroot.org/) LTS Linux
-- **File Systems:**
-  - [SquashFS](https://www.kernel.org/doc/Documentation/filesystems/squashfs.txt) for read-only file systems (using LZ4 compression)
-  - [ZRAM](https://www.kernel.org/doc/Documentation/blockdev/zram.txt) for `/tmp`, `/var` and swap (using LZ4 compression)
-- **Container Platform:**
-  - [Docker Engine](https://docs.docker.com/engine/) for running Home Assistant components in containers
-- **Updates:**
-  - [RAUC](https://rauc.io/) for Over The Air (OTA) and USB updates
-- **Security:**
-  - [AppArmor](https://apparmor.net/) Linux kernel security module
+## Brand
 
-### Development builds
+Logos and color tokens live in [`branding/`](branding/). The product name and IDs used at build time are set once in [`buildroot-external/meta`](buildroot-external/meta).
 
-The Development build GitHub Action Workflow is a manually triggered workflow
-which creates Home Assistant OS development builds. The development builds are
-available at [https://os-artifacts.home-assistant.io/index.html](https://os-artifacts.home-assistant.io/index.html).
+## Upstream and license
+
+AsyncOS is derived from [Home Assistant Operating System](https://github.com/home-assistant/operating-system) and is distributed under the [Apache License 2.0](LICENSE). AsyncOS is an independent project and is not affiliated with or endorsed by Home Assistant or the Open Home Foundation.

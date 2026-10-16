@@ -1,5 +1,5 @@
 [Unit]
-Description=HAOS overlay setup 
+Description=AsyncOS overlay setup
 DefaultDependencies=no
 RefuseManualStart=true
 RefuseManualStop=true

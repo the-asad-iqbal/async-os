@@ -1,18 +1,18 @@
 #!/bin/bash
 
-function haos_image_name() {
-    echo "${BINARIES_DIR}/${HAOS_ID}_${BOARD_ID}-$(haos_version).${1}"
+function os_image_name() {
+    echo "${BINARIES_DIR}/${OS_ID}_${BOARD_ID}-$(os_version).${1}"
 }
 
-function haos_image_basename() {
-    echo "${BINARIES_DIR}/${HAOS_ID}_${BOARD_ID}-$(haos_version)"
+function os_image_basename() {
+    echo "${BINARIES_DIR}/${OS_ID}_${BOARD_ID}-$(os_version)"
 }
 
-function haos_rauc_compatible() {
-    echo "${HAOS_ID}-${BOARD_ID}"
+function os_rauc_compatible() {
+    echo "${OS_ID}-${BOARD_ID}"
 }
 
-function haos_version() {
+function os_version() {
     if [ -z "${VERSION_SUFFIX}" ]; then
         echo "${VERSION_MAJOR}.${VERSION_MINOR}"
     else

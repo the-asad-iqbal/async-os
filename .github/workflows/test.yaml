@@ -1,12 +1,12 @@
-name: Test HAOS image
-run-name: "Test HAOS ${{ inputs.version || format('(OS build #{0})', github.event.workflow_run.run_number) }}"
+name: Test AsyncOS image
+run-name: "Test AsyncOS ${{ inputs.version || format('(OS build #{0})', github.event.workflow_run.run_number) }}"
 
 on:
   # Manual test of specified version
   workflow_dispatch:
     inputs:
       version:
-        description: Version of HAOS to test
+        description: Version of AsyncOS to test
         required: true
         type: string
 
@@ -20,7 +20,7 @@ on:
         type: boolean
         default: true
       version:
-        description: Version of HAOS to test (as used in the name of the qcow2 image artifact)
+        description: Version of AsyncOS to test (as used in the name of the qcow2 image artifact)
         required: true
         type: string
 
@@ -50,21 +50,21 @@ jobs:
         run:
           pip install -r tests/requirements.txt
 
-      - name: Download HAOS image
+      - name: Download AsyncOS image
         if: ${{ !inputs.use-artifact }}
         run: |
-          curl -sfL -o haos.qcow2.xz  https://os-artifacts.home-assistant.io/${{github.event.inputs.version}}/haos_ova-${{github.event.inputs.version}}.qcow2.xz
+          curl -sfL -o asyncos.qcow2.xz  https://os-artifacts.home-assistant.io/${{github.event.inputs.version}}/asyncos_ova-${{github.event.inputs.version}}.qcow2.xz
 
       - name: Get OS image artifact
         if: ${{ inputs.use-artifact }}
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: haos_ova-${{ inputs.version }}.qcow2.xz
+          name: asyncos_ova-${{ inputs.version }}.qcow2.xz
 
       - name: Extract OS image
         run: |
-          xz -dc haos*.qcow2.xz > tests/haos.qcow2
-          rm haos*.qcow2.xz
+          xz -dc asyncos*.qcow2.xz > tests/asyncos.qcow2
+          rm asyncos*.qcow2.xz
 
       - name: Enable KVM group perms
         run: |

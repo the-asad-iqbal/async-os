@@ -1,5 +1,5 @@
 [Unit]
-Description=HAOS data disk detach
+Description=AsyncOS data disk detach
 DefaultDependencies=no
 Before=mnt-data.mount
 RefuseManualStart=true

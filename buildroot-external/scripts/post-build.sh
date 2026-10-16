@@ -2,10 +2,10 @@
 # shellcheck disable=SC1090,SC1091
 set -e
 
-SCRIPT_DIR=${BR2_EXTERNAL_HAOS_PATH}/scripts
+SCRIPT_DIR=${BR2_EXTERNAL_ASYNCOS_PATH}/scripts
 BOARD_DIR=${2}
 
-. "${BR2_EXTERNAL_HAOS_PATH}/meta"
+. "${BR2_EXTERNAL_ASYNCOS_PATH}/meta"
 . "${BOARD_DIR}/meta"
 
 . "${SCRIPT_DIR}/rootfs-layer.sh"
@@ -13,7 +13,7 @@ BOARD_DIR=${2}
 . "${SCRIPT_DIR}/rauc.sh"
 
 
-# HAOS tasks
+# AsyncOS tasks
 fix_rootfs
 install_tini_docker
 setup_localtime
@@ -22,14 +22,16 @@ setup_vconsole
 # Write os-release
 # shellcheck disable=SC2153
 (
-    echo "NAME=\"${HAOS_NAME}\""
-    echo "VERSION=\"$(haos_version) (${BOARD_NAME})\""
-    echo "ID=${HAOS_ID}"
-    echo "VERSION_ID=$(haos_version)"
-    echo "PRETTY_NAME=\"${HAOS_NAME} $(haos_version)\""
-    echo "CPE_NAME=cpe:2.3:o:home-assistant:${HAOS_ID}:$(haos_version):*:${DEPLOYMENT}:*:*:*:${BOARD_ID}:*"
-    echo "HOME_URL=https://www.home-assistant.io/"
-    echo "VARIANT=\"${HAOS_NAME} ${BOARD_NAME}\""
+    echo "NAME=\"${OS_NAME}\""
+    echo "VERSION=\"$(os_version) (${BOARD_NAME})\""
+    echo "ID=${OS_ID}"
+    echo "VERSION_ID=$(os_version)"
+    echo "PRETTY_NAME=\"${OS_NAME} $(os_version)\""
+    echo "ANSI_COLOR=\"${OS_ANSI_COLOR}\""
+    echo "CPE_NAME=cpe:2.3:o:${OS_VENDOR}:${OS_ID}:$(os_version):*:${DEPLOYMENT}:*:*:*:${BOARD_ID}:*"
+    echo "HOME_URL=${OS_HOME_URL}"
+    echo "BUG_REPORT_URL=${OS_BUG_REPORT_URL}"
+    echo "VARIANT=\"${OS_NAME} ${BOARD_NAME}\""
     echo "VARIANT_ID=${BOARD_ID}"
     echo "SUPERVISOR_MACHINE=${SUPERVISOR_MACHINE}"
     echo "SUPERVISOR_ARCH=${SUPERVISOR_ARCH}"

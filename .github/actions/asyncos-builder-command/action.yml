@@ -1,7 +1,7 @@
-name: "Run command in HAOS build container"
+name: "Run command in AsyncOS build container"
 inputs:
   image:
-    description: "HAOS builder image to use"
+    description: "AsyncOS builder image to use"
     required: true
   command:
     description: "Command to run in the container"
@@ -9,7 +9,7 @@ inputs:
 runs:
   using: 'composite'
   steps:
-  - name: "Run command in HAOS build container"
+  - name: "Run command in AsyncOS build container"
     shell: bash
     run: |
       docker run --rm --privileged \

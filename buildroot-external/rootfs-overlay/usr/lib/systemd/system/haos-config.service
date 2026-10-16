@@ -1,5 +1,5 @@
 [Unit]
-Description=HAOS Configuration Manager
+Description=AsyncOS Configuration Manager
 After=haos-bind.target network.target
 
 [Service]

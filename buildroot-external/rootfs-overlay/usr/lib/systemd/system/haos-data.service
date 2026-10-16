@@ -1,5 +1,5 @@
 [Unit]
-Description=Home Assistant OS data partition migration
+Description=AsyncOS data partition migration
 DefaultDependencies=no
 RefuseManualStart=true
 RefuseManualStop=true

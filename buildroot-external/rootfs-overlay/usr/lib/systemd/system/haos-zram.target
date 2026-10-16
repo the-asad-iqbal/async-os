@@ -1,5 +1,5 @@
 [Unit]
-Description=HAOS zram targets
+Description=AsyncOS zram targets
 Documentation=man:systemd.target(5)
 
 [Install]
