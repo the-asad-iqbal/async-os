@@ -55,6 +55,13 @@ type DeviceConfig struct {
 	RatedW float64 `json:"rated_w,omitempty"`
 	// PollIntervalMS defaults to 1000.
 	PollIntervalMS int `json:"poll_interval_ms,omitempty"`
+
+	// Genset only. MinLoadW, when set, is the minimum load in watts and
+	// replaces the site-wide percentage.
+	MinLoadW float64 `json:"min_load_w,omitempty"`
+	// RunningSignal reads the genset's running state from a register of
+	// this device, e.g. a digital input bit wired to the genset or ATS.
+	RunningSignal *devices.Register `json:"running_signal,omitempty"`
 }
 
 // Site is the full configuration of one installation.
@@ -179,12 +186,31 @@ func (s *Site) Validate(lib *devices.Library) error {
 			if d.Role == RoleGensetMeter && d.RatedW <= 0 {
 				errs = append(errs, fmt.Errorf("device %q: genset rating is required", d.ID))
 			}
+			if d.Role == RoleGensetMeter && (d.MinLoadW < 0 || (d.RatedW > 0 && d.MinLoadW >= d.RatedW)) {
+				errs = append(errs, fmt.Errorf("device %q: minimum load must be below the genset rating", d.ID))
+			}
 		case RolePVInverter:
+			if d.MinLoadW != 0 || d.RunningSignal != nil {
+				errs = append(errs, fmt.Errorf("device %q: minimum load and running signal apply to gensets only", d.ID))
+			}
 			if profile.Kind != devices.KindInverter {
 				errs = append(errs, fmt.Errorf("device %q: role %s needs an inverter profile", d.ID, d.Role))
 			}
 		default:
 			errs = append(errs, fmt.Errorf("device %q: unknown role %q", d.ID, d.Role))
+		}
+	}
+	for _, d := range s.Devices {
+		if d.RunningSignal != nil {
+			check := devices.Profile{ID: "check", Manufacturer: "-", Model: "-", Kind: devices.KindMeter, Source: "-",
+				Connection: devices.Connection{Transport: "tcp"},
+				Points:     map[string]devices.Register{devices.PointPower: *d.RunningSignal}}
+			if err := check.Validate(); err != nil {
+				errs = append(errs, fmt.Errorf("device %q: running signal: %w", d.ID, err))
+			}
+			if d.Role == RoleGridMeter {
+				errs = append(errs, fmt.Errorf("device %q: running signal applies to gensets only", d.ID))
+			}
 		}
 	}
 	if gridMeters > 1 {

@@ -29,6 +29,8 @@ func TestDecode(t *testing.T) {
 		{"sunspec sf", Register{Type: TypeInt16, ScaleFactor: &sf}, []uint16{1234}, -1, 123.4, true},
 		{"unavailable marker", Register{Type: TypeInt16, Unavailable: []float64{-32768}}, []uint16{0x8000}, 0, 0, false},
 		{"int64", Register{Type: TypeInt64, Scale: 0.001}, []uint16{0, 0, 0x0001, 0x86A0}, 0, 100, true},
+		{"bit set", Register{Type: TypeUint16, Bit: ptr8(3)}, []uint16{0b1000}, 0, 1, true},
+		{"bit clear", Register{Type: TypeUint16, Bit: ptr8(2)}, []uint16{0b1000}, 0, 0, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -232,5 +234,26 @@ func TestSunSpecMeterDiscovery(t *testing.T) {
 	}
 	if reading[PointPower] != -2500 || reading[PointEnergyImport] != 100 || reading[PointEnergyExport] != 50 {
 		t.Fatalf("reading = %v", reading)
+	}
+}
+
+func ptr8(v uint8) *uint8 { return &v }
+
+func TestExtraPointsAreRead(t *testing.T) {
+	lib, _ := LoadLibrary("")
+	profile, _ := lib.Get("eastron-sdm630")
+	bank := modbus.NewRegisterBank()
+	for addr := uint16(0); addr < 80; addr++ {
+		bank.SetInput(1, addr, 0)
+	}
+	bank.SetHolding(1, 500, 0b0100) // digital inputs, DI3 on
+	device := newTestDevice(t, bank, profile, 1)
+	device.AddPoints(map[string]Register{PointRunning: {Table: TableHolding, Address: 500, Type: TypeUint16, Bit: ptr8(2)}})
+	reading, err := device.Read(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reading[PointRunning] != 1 {
+		t.Fatalf("running = %v", reading[PointRunning])
 	}
 }

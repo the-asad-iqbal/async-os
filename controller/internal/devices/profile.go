@@ -45,6 +45,7 @@ const (
 	PointRatedPower   = "rated_power"   // W, inverter nameplate
 	PointDCPower      = "dc_power"      // W
 	PointPowerLimit   = "power_limit"   // %, active limit read back
+	PointRunning      = "running"       // 1 when a genset reports running, 0 otherwise
 )
 
 // ControlPowerLimit sets active power as a percentage of rated power.
@@ -56,7 +57,7 @@ var knownPoints = map[string]string{
 	PointCurrentL1: "A", PointCurrentL2: "A", PointCurrentL3: "A",
 	PointFrequency: "Hz", PointPowerFactor: "", PointEnergyImport: "kWh",
 	PointEnergyExport: "kWh", PointEnergyTotal: "kWh", PointRatedPower: "W",
-	PointDCPower: "W", PointPowerLimit: "%",
+	PointDCPower: "W", PointPowerLimit: "%", PointRunning: "",
 }
 
 // Table selects the Modbus register table.
@@ -116,6 +117,9 @@ type Register struct {
 	// Unavailable marks raw values that mean "not implemented", e.g.
 	// 0x8000 for SunSpec int16.
 	Unavailable []float64 `json:"unavailable,omitempty"`
+	// Bit, if set, reads a single bit (0 = least significant) of an
+	// integer register, e.g. a digital input. The value is 0 or 1.
+	Bit *uint8 `json:"bit,omitempty"`
 }
 
 // Control is a writable setpoint.
@@ -246,6 +250,9 @@ func (r Register) validate() error {
 	}
 	if r.WordOrder != "" && r.WordOrder != "high_first" && r.WordOrder != "low_first" {
 		return fmt.Errorf("word_order %q must be high_first or low_first", r.WordOrder)
+	}
+	if r.Bit != nil && (r.Type == TypeFloat32 || int(*r.Bit) >= 16*r.Type.Registers()) {
+		return errors.New("bit must address a bit inside an integer register")
 	}
 	if int(r.Address)+r.Type.Registers() > 0x10000 {
 		return errors.New("address range overflows")

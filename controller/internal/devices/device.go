@@ -33,6 +33,7 @@ type Device struct {
 	resolved bool
 	points   map[string]Register
 	controls map[string]Control
+	extra    map[string]Register
 	blocks   []block
 	// pointwise is set once a device rejects block reads, so it is read
 	// one value at a time from then on.
@@ -42,6 +43,15 @@ type Device struct {
 // NewDevice binds a profile to a Modbus client and unit ID.
 func NewDevice(profile *Profile, client RegisterClient, unitID byte) *Device {
 	return &Device{profile: profile, client: client, unitID: unitID}
+}
+
+// AddPoints adds installer-defined points, such as a genset running
+// signal on a digital input. Call it before the first Read.
+func (d *Device) AddPoints(points map[string]Register) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.extra = points
+	d.resolved = false
 }
 
 // Profile returns the device's profile.
@@ -113,7 +123,13 @@ func (d *Device) resolve(ctx context.Context) error {
 		}
 		d.points, d.controls = points, controls
 	} else {
-		d.points, d.controls = d.profile.Points, d.profile.Controls
+		d.points, d.controls = map[string]Register{}, d.profile.Controls
+		for name, r := range d.profile.Points {
+			d.points[name] = r
+		}
+	}
+	for name, r := range d.extra {
+		d.points[name] = r
 	}
 	d.blocks = planBlocks(d.points)
 	d.resolved = true

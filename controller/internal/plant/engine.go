@@ -185,6 +185,9 @@ func (e *Engine) startLocked() {
 		r := &runner{cfg: cfg, bus: bus}
 		if cfg.Enabled {
 			r.device = devices.NewDevice(profile, e.clientLocked(bus), byte(cfg.UnitID))
+			if cfg.RunningSignal != nil {
+				r.device.AddPoints(map[string]devices.Register{devices.PointRunning: *cfg.RunningSignal})
+			}
 			e.pollers.Add(1)
 			go func() {
 				defer e.pollers.Done()
@@ -337,10 +340,16 @@ func (e *Engine) cycle(ctx context.Context) {
 			m.Grid = &meter
 		case RoleGensetMeter:
 			status.RatedW = r.cfg.RatedW
-			m.Gensets = append(m.Gensets, control.Genset{
-				Meter:  meterFor(r.cfg.ID, online, updated, power, reading),
-				RatedW: r.cfg.RatedW,
-			})
+			g := control.Genset{
+				Meter:    meterFor(r.cfg.ID, online, updated, power, reading),
+				RatedW:   r.cfg.RatedW,
+				MinLoadW: r.cfg.MinLoadW,
+			}
+			if v, ok := reading[devices.PointRunning]; ok && r.cfg.RunningSignal != nil {
+				running := v != 0
+				g.Running = &running
+			}
+			m.Gensets = append(m.Gensets, g)
 		case RolePVInverter:
 			rated := reading[devices.PointRatedPower]
 			if rated <= 0 {

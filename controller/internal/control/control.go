@@ -9,6 +9,8 @@
 package control
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"math"
 	"time"
@@ -52,8 +54,20 @@ type Settings struct {
 	// RampUpPctPerSec limits how fast the total PV limit may rise, in
 	// percent of controllable rated power per second.
 	RampUpPctPerSec float64 `json:"ramp_up_pct_per_sec"`
-	// FailsafeLimitPct is applied when a required measurement is missing.
+	// FailsafeAction is what happens when a required measurement is
+	// missing: "limit" curtails to FailsafeLimitPct, "hold" keeps the last
+	// limit sent.
+	FailsafeAction string `json:"failsafe_action"`
+	// FailsafeLimitPct is applied by the "limit" fail-safe action.
 	FailsafeLimitPct float64 `json:"failsafe_limit_pct"`
+	// MinLimitPct and MaxLimitPct bound every limit sent in normal
+	// operation, e.g. to never fully stop or never exceed a contract cap.
+	MinLimitPct float64 `json:"min_limit_pct"`
+	MaxLimitPct float64 `json:"max_limit_pct"`
+	// SourceDebounce: a change in a genset's running state must hold this
+	// long before the controller acts on it, so an ATS transfer does not
+	// whipsaw the inverters.
+	SourceDebounce Duration `json:"source_debounce"`
 	// MeasurementTimeout marks a meter reading as stale.
 	MeasurementTimeout Duration `json:"measurement_timeout"`
 
@@ -79,7 +93,11 @@ func DefaultSettings() Settings {
 		GensetMarginW:         500,
 		GensetRunningMinW:     500,
 		RampUpPctPerSec:       5,
+		FailsafeAction:        FailsafeLimit,
 		FailsafeLimitPct:      0,
+		MinLimitPct:           0,
+		MaxLimitPct:           100,
+		SourceDebounce:        Duration(2 * time.Second),
 		MeasurementTimeout:    Duration(5 * time.Second),
 		MinStepPct:            1,
 		KeepaliveInterval:     Duration(60 * time.Second),
@@ -100,8 +118,16 @@ func (s Settings) Validate() error {
 		return fmt.Errorf("genset minimum load must be between 0 and 90 %%")
 	case s.RampUpPctPerSec <= 0 || s.RampUpPctPerSec > 100:
 		return fmt.Errorf("ramp-up rate must be above 0 and at most 100 %%/s")
+	case s.FailsafeAction != FailsafeLimit && s.FailsafeAction != FailsafeHold:
+		return fmt.Errorf("fail-safe action must be %q or %q", FailsafeLimit, FailsafeHold)
 	case s.FailsafeLimitPct < 0 || s.FailsafeLimitPct > 100:
 		return fmt.Errorf("fail-safe limit must be between 0 and 100 %%")
+	case s.MinLimitPct < 0 || s.MaxLimitPct > 100 || s.MinLimitPct >= s.MaxLimitPct:
+		return fmt.Errorf("inverter limit bounds must satisfy 0 <= minimum < maximum <= 100 %%")
+	case s.FailsafeLimitPct > s.MaxLimitPct:
+		return fmt.Errorf("fail-safe limit cannot exceed the maximum limit")
+	case s.SourceDebounce.D() < 0 || s.SourceDebounce.D() > 30*time.Second:
+		return fmt.Errorf("source debounce must be between 0 and 30 s")
 	case s.MeasurementTimeout.D() < time.Second || s.MeasurementTimeout.D() > time.Minute:
 		return fmt.Errorf("measurement timeout must be between 1 s and 60 s")
 	case s.MinStepPct < 0 || s.MinStepPct > 10:
@@ -109,6 +135,26 @@ func (s Settings) Validate() error {
 	case s.KeepaliveInterval.D() < 5*time.Second:
 		return fmt.Errorf("keepalive interval must be at least 5 s")
 	}
+	return nil
+}
+
+// Fail-safe actions.
+const (
+	FailsafeLimit = "limit"
+	FailsafeHold  = "hold"
+)
+
+// UnmarshalJSON starts from DefaultSettings, so settings saved by an
+// older version gain safe values for fields added since.
+func (s *Settings) UnmarshalJSON(data []byte) error {
+	type plain Settings
+	v := plain(DefaultSettings())
+	d := json.NewDecoder(bytes.NewReader(data))
+	d.DisallowUnknownFields()
+	if err := d.Decode(&v); err != nil {
+		return err
+	}
+	*s = Settings(v)
 	return nil
 }
 
@@ -131,6 +177,12 @@ type Meter struct {
 type Genset struct {
 	Meter
 	RatedW float64
+	// MinLoadW, when above zero, is this genset's minimum load in watts
+	// and replaces the percentage setting.
+	MinLoadW float64
+	// Running is the genset's own running signal (e.g. a digital input),
+	// or nil to infer it from output power.
+	Running *bool
 }
 
 // Inverter is one PV inverter as seen in one cycle.
@@ -222,6 +274,7 @@ type State struct {
 	sentPct       float64
 	sentAt        time.Time
 	exportSince   time.Time
+	running       map[string]*debounced
 	controllableW float64
 }
 
@@ -285,7 +338,7 @@ func Step(s Settings, m Measurements, state *State) Decision {
 		}
 	}
 
-	var gensetPower, gensetRated float64
+	var gensetPower float64
 	for _, g := range m.Gensets {
 		if !fresh(g.Online, g.Updated) {
 			if failsafe == "" {
@@ -294,13 +347,20 @@ func Step(s Settings, m Measurements, state *State) Decision {
 			d.Alarms = append(d.Alarms, Alarm{Code: AlarmGensetMeterOffline, Device: g.ID, Critical: true, Message: "Genset meter is not responding"})
 			continue
 		}
-		if g.PowerW < s.GensetRunningMinW && !(g.PowerW < 0) {
+		raw := g.PowerW >= s.GensetRunningMinW || g.PowerW < 0
+		if g.Running != nil {
+			raw = *g.Running
+		}
+		if !state.debounce(g.ID, raw, m.Now, s.SourceDebounce.D()) {
 			continue // stopped
 		}
 		d.GensetsRunning++
 		gensetPower += g.PowerW
-		gensetRated += g.RatedW
 		minLoad := s.GensetMinLoadPct / 100 * g.RatedW
+		if g.MinLoadW > 0 {
+			minLoad = g.MinLoadW
+		}
+		d.GensetMinLoadW += minLoad
 		if g.PowerW < 0 {
 			d.Alarms = append(d.Alarms, Alarm{Code: AlarmGensetReversePower, Device: g.ID, Critical: true,
 				Message: fmt.Sprintf("Genset is absorbing %.0f W (reverse power)", -g.PowerW)})
@@ -310,7 +370,6 @@ func Step(s Settings, m Measurements, state *State) Decision {
 		}
 	}
 	if d.GensetsRunning > 0 {
-		d.GensetMinLoadW = s.GensetMinLoadPct / 100 * gensetRated
 		h := gensetPower - d.GensetMinLoadW - s.GensetMarginW
 		if h < headroom {
 			headroom, d.Binding = h, "genset"
@@ -356,6 +415,14 @@ func Step(s Settings, m Measurements, state *State) Decision {
 
 	var target float64
 	switch {
+	case failsafe != "" && s.FailsafeAction == FailsafeHold:
+		d.Status, d.Reason = StatusFailsafe, failsafe+"; holding the last limit"
+		if !state.initialized {
+			d.Reason = failsafe + "; no limit sent yet, waiting for measurements"
+			d.LimitW, d.LimitPct = controllableRated, 100
+			return d
+		}
+		target = state.limitW
 	case failsafe != "":
 		d.Status, d.Reason = StatusFailsafe, failsafe
 		target = s.FailsafeLimitPct / 100 * controllableRated
@@ -377,6 +444,10 @@ func Step(s Settings, m Measurements, state *State) Decision {
 		}
 	}
 	target = math.Max(0, math.Min(controllableRated, target))
+	target = math.Min(target, s.MaxLimitPct/100*controllableRated)
+	if failsafe == "" {
+		target = math.Max(target, s.MinLimitPct/100*controllableRated)
+	}
 
 	limit := target
 	if failsafe == "" && state.initialized && target > state.limitW {
@@ -429,6 +500,35 @@ const breachGain = 2
 
 // maxRampStep caps the time step used for ramping.
 const maxRampStep = 5 * time.Second
+
+// debounced is a boolean that only changes after holding its new value.
+type debounced struct {
+	value   bool
+	pending bool
+	since   time.Time
+}
+
+// debounce returns the committed value for id. The first observation is
+// taken as is; later changes must hold for delay.
+func (st *State) debounce(id string, raw bool, now time.Time, delay time.Duration) bool {
+	if st.running == nil {
+		st.running = map[string]*debounced{}
+	}
+	d, ok := st.running[id]
+	if !ok {
+		st.running[id] = &debounced{value: raw, pending: raw}
+		return raw
+	}
+	switch {
+	case raw == d.value:
+		d.pending = raw
+	case raw != d.pending:
+		d.pending, d.since = raw, now
+	case now.Sub(d.since) >= delay:
+		d.value = raw
+	}
+	return d.value
+}
 
 // ForceResend makes the next cycle write the limit, e.g. after an inverter
 // reconnects and may have lost its setpoint.

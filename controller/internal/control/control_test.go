@@ -1,6 +1,7 @@
 package control
 
 import (
+	"encoding/json"
 	"math"
 	"testing"
 	"time"
@@ -336,5 +337,103 @@ func TestClosedLoop(t *testing.T) {
 				break
 			}
 		}
+	}
+}
+
+func genset(id string, powerW, ratedW float64, at time.Time) Genset {
+	return Genset{Meter: Meter{ID: id, Online: true, Updated: at, PowerW: powerW}, RatedW: ratedW}
+}
+
+func TestGensetRunningSignalIsDebounced(t *testing.T) {
+	s := controlSettings()
+	var st State
+	off, on := false, true
+	step := func(sec float64, running *bool) Decision {
+		now := t0.Add(time.Duration(sec * float64(time.Second)))
+		g := genset("dg1", 20000, 50000, now)
+		g.Running = running
+		return Step(s, Measurements{Now: now, Gensets: []Genset{g}, Inverters: []Inverter{inverter("inv", 5000, 30000, now)}}, &st)
+	}
+	if d := step(0, &off); d.GensetsRunning != 0 {
+		t.Fatal("explicit 'not running' signal ignored in favour of power")
+	}
+	// An ATS transfer: the signal flickers on for one second.
+	if d := step(1, &on); d.GensetsRunning != 0 {
+		t.Fatal("reacted to a flicker")
+	}
+	if d := step(1.5, &off); d.GensetsRunning != 0 {
+		t.Fatal("reacted to a flicker")
+	}
+	step(2, &on)
+	step(3, &on)
+	if d := step(4.1, &on); d.GensetsRunning != 1 || d.Binding != "genset" {
+		t.Fatalf("running not committed after the debounce: %+v", d)
+	}
+}
+
+func TestGensetAbsoluteMinimumLoad(t *testing.T) {
+	s := controlSettings()
+	var st State
+	g := genset("dg1", 30000, 100000, t0)
+	g.MinLoadW = 25000 // the site's 25 kW floor, instead of 30 %
+	d := Step(s, Measurements{Now: t0, Gensets: []Genset{g}, Inverters: []Inverter{inverter("inv", 5000, 30000, t0)}}, &st)
+	if d.GensetMinLoadW != 25000 || d.HeadroomW != 30000-25000-500 {
+		t.Fatalf("decision = %+v", d)
+	}
+}
+
+func TestLimitBounds(t *testing.T) {
+	s := controlSettings()
+	s.MinLimitPct, s.MaxLimitPct = 10, 80
+	var st State
+	// Massive export would call for 0 %: held at the 10 % floor.
+	d := Step(s, Measurements{Now: t0, Grid: grid(-50000, t0), Inverters: []Inverter{inverter("inv", 9000, 10000, t0)}}, &st)
+	if d.LimitPct != 10 {
+		t.Fatalf("limit = %v %%, want the 10 %% floor", d.LimitPct)
+	}
+	var st2 State
+	d = Step(s, Measurements{Now: t0, Inverters: []Inverter{inverter("inv", 9000, 10000, t0)}}, &st2)
+	if d.LimitPct != 80 {
+		t.Fatalf("unconstrained limit = %v %%, want the 80 %% cap", d.LimitPct)
+	}
+}
+
+func TestFailsafeHoldKeepsLastLimit(t *testing.T) {
+	s := controlSettings()
+	s.FailsafeAction = FailsafeHold
+	var st State
+	m := Measurements{Now: t0, Grid: grid(-1000, t0), Inverters: []Inverter{inverter("inv", 6000, 10000, t0)}}
+	first := Step(s, m, &st)
+
+	m.Now = t0.Add(10 * time.Second) // grid reading now stale
+	m.Inverters[0].Updated = m.Now
+	d := Step(s, m, &st)
+	if d.Status != StatusFailsafe || d.LimitPct != first.LimitPct || d.Send {
+		t.Fatalf("hold = %+v, first = %v %%", d, first.LimitPct)
+	}
+
+	var fresh State
+	d = Step(s, Measurements{Now: t0, Grid: grid(0, t0.Add(-time.Minute)), Inverters: []Inverter{inverter("inv", 6000, 10000, t0)}}, &fresh)
+	if d.Send {
+		t.Fatal("hold sent a limit before ever having one")
+	}
+}
+
+func TestSettingsJSONFillsNewFieldsWithDefaults(t *testing.T) {
+	var s Settings
+	old := `{"mode":"control","export_limit_w":5000,"grid_margin_w":200,"grid_present_min_voltage":150,
+		"genset_min_load_pct":30,"genset_margin_w":500,"genset_running_min_w":500,"ramp_up_pct_per_sec":5,
+		"failsafe_limit_pct":0,"measurement_timeout":"5s","min_step_pct":1,"keepalive_interval":"1m0s","export_alarm_delay":"10s"}`
+	if err := json.Unmarshal([]byte(old), &s); err != nil {
+		t.Fatal(err)
+	}
+	if s.ExportLimitW != 5000 || s.MaxLimitPct != 100 || s.FailsafeAction != FailsafeLimit || s.SourceDebounce.D() != 2*time.Second {
+		t.Fatalf("settings = %+v", s)
+	}
+	if err := s.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(`{"mode":"control","typo":1}`), &s); err == nil {
+		t.Fatal("unknown field accepted")
 	}
 }

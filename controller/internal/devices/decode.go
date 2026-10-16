@@ -24,6 +24,10 @@ func decode(r Register, raw []uint16, sf int16) (value float64, ok bool, err err
 		bits = bits<<16 | uint64(w)
 	}
 
+	if r.Bit != nil {
+		return float64(bits >> *r.Bit & 1), true, nil
+	}
+
 	var v float64
 	switch r.Type {
 	case TypeUint16, TypeUint32, TypeUint64:
