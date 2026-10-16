@@ -2,16 +2,192 @@
 import { h, s, replace } from '../lib/dom.js';
 import { get, put } from '../lib/api.js';
 import { icon } from '../lib/icons.js';
+import { mdiIcon } from '../lib/mdi.js';
 import * as live from '../lib/live.js';
 import * as fmt from '../lib/format.js';
 import { lineChart, legend } from '../lib/charts.js';
 import { banner, colors, field, formDialog, kpi, numberInput, pageHead, ring, statusPill, pill, toast } from '../lib/ui.js';
+
+
+let _powerFlowCardCtor = null;
+async function loadPowerFlowCard() {
+  if (_powerFlowCardCtor) return _powerFlowCardCtor;
+  try {
+    const mod = await import('/assets/power-flow-card-plus.js');
+    _powerFlowCardCtor = mod.PowerFlowCardPlus || null;
+  } catch (err) { console.error('power flow card module failed', err); }
+  return _powerFlowCardCtor;
+}
+function ensureHACardElements() {
+  if (!customElements.get('ha-card')) {
+    class AsyncOSHaCard extends HTMLElement {
+      connectedCallback() {
+        this.style.display = 'block';
+        this.style.overflow = 'hidden';
+        this.style.position = 'relative';
+      }
+    }
+    customElements.define('ha-card', AsyncOSHaCard);
+  }
+  if (!customElements.get('ha-ripple')) {
+    class AsyncOSHaRipple extends HTMLElement {
+      connectedCallback() { this.style.display = 'none'; }
+    }
+    customElements.define('ha-ripple', AsyncOSHaRipple);
+  }
+  if (!customElements.get('ha-icon')) {
+    const iconMap = {
+      'mdi:solar-power': 'mdi:solar-power',
+      'mdi:solar-panel': 'mdi:solar-power',
+      'mdi:transmission-tower': 'mdi:transmission-tower',
+      'mdi:transmission-tower-off': 'mdi:transmission-tower-off',
+      'mdi:home': 'mdi:home',
+      'mdi:battery-high': 'mdi:battery-high',
+      'mdi:battery-charging': 'mdi:battery-charging',
+    };
+    class AsyncOSHaIcon extends HTMLElement {
+      static get observedAttributes() { return ['icon']; }
+      connectedCallback() {
+        // The card's own stylesheet sets `ha-icon { display:inline;
+        // padding-bottom:2px }`; give the shadow content a definite box.
+        this.style.display = 'inline-flex';
+        this.style.width = 'var(--mdc-icon-size, 24px)';
+        this.style.height = 'var(--mdc-icon-size, 24px)';
+        this.style.alignItems = 'center';
+        this.style.justifyContent = 'center';
+        this._render();
+      }
+      attributeChangedCallback() { this._render(); }
+      set icon(name) { this.setAttribute('icon', name || ''); }
+      get icon() { return this.getAttribute('icon'); }
+      _render() {
+        const name = iconMap[this.getAttribute('icon')] || 'mdi:help-circle';
+        const size = getComputedStyle(this).getPropertyValue('--mdc-icon-size').trim() || '24px';
+        // The card stylesheet has `.circle svg { width:100%; height:100%;
+        // position:absolute; fill:none }`, which would stretch and unfill any
+        // plain <svg> inside a circle. The icons therefore live in this
+        // element's own shadow root, out of reach of that rule.
+        if (!this.shadowRoot) this.attachShadow({ mode: 'open' });
+        this.shadowRoot.replaceChildren(mdiIcon(name, size));
+      }
+    }
+    customElements.define('ha-icon', AsyncOSHaIcon);
+  }
+}
+/**
+ * The card's own :host{} rule sets its icon colours from Home Assistant theme
+ * variables, and a :host rule beats a document stylesheet rule. So the theme
+ * has to be applied as inline custom properties on the element itself.
+ */
+function applyCardTheme(el) {
+  const dark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+  const cs = getComputedStyle(document.documentElement);
+  const v = (name, fallback) => (cs.getPropertyValue(name).trim() || fallback);
+  const theme = {
+    '--primary-text-color': v('--foreground', dark ? '#fafafa' : '#09090b'),
+    '--secondary-text-color': v('--muted-foreground', dark ? '#a1a1aa' : '#71717a'),
+    '--primary-color': v('--primary', dark ? '#7e7ff9' : '#5b5cf6'),
+    '--card-background-color': v('--card', dark ? '#09090b' : '#ffffff'),
+    '--divider-color': v('--border', dark ? '#27272a' : '#e4e4e7'),
+    '--energy-solar-color': v('--chart-solar', '#f59e0b'),
+    '--energy-grid-consumption-color': v('--chart-grid', dark ? '#7e7ff9' : '#5b5cf6'),
+    '--energy-grid-return-color': v('--chart-export', '#06b6d4'),
+    '--energy-battery-in-color': v('--chart-genset', '#f43f5e'),
+    '--energy-battery-out-color': v('--chart-genset', '#f43f5e'),
+    '--energy-non-fossil-color': v('--success', '#16a34a'),
+    '--non-fossil-color': v('--success', '#16a34a'),
+  };
+  // Icon colours are separate variables in the card; mirror the flow colours.
+  theme['--icon-solar-color'] = theme['--energy-solar-color'];
+  theme['--icon-grid-color'] = theme['--energy-grid-consumption-color'];
+  theme['--icon-home-color'] = theme['--energy-grid-consumption-color'];
+  theme['--icon-battery-color'] = theme['--energy-battery-in-color'];
+  theme['--icon-non-fossil-color'] = theme['--non-fossil-color'];
+  theme['--cirlce-grid-color'] = theme['--energy-grid-consumption-color'];
+  theme['--circle-battery-color'] = theme['--energy-battery-in-color'];
+  theme['--battery-grid-line'] = theme['--energy-grid-return-color'];
+  theme['--text-solar-color'] = theme['--primary-text-color'];
+  theme['--text-home-color'] = theme['--primary-text-color'];
+  theme['--text-non-fossil-color'] = theme['--primary-text-color'];
+  theme['--text-grid-consumption-color'] = theme['--energy-grid-consumption-color'];
+  theme['--text-grid-return-color'] = theme['--energy-grid-return-color'];
+  theme['--text-battery-in-color'] = theme['--energy-battery-in-color'];
+  theme['--text-battery-out-color'] = theme['--energy-battery-out-color'];
+  // Layout corrections on top of the colours. The card paints its flow lines in
+  // an absolutely positioned .lines layer that sits above the circles, so the
+  // lines run straight through the node discs. Lift the circles above that
+  // layer and hide the small seam where the SVG paths meet the ring edges.
+  theme['--clickable-cursor'] = 'default';
+  theme['--lines-svg-not-flat-line-top'] = '0%';
+  theme['--lines-svg-flat-width'] = 'calc(100% - 156px)';
+  theme['--lines-svg-not-flat-width'] = 'calc(103% - 160px)';
+  theme['--size-circle-entity'] = '84px';
+  for (const [name, value] of Object.entries(theme)) el.style.setProperty(name, value);
+
+  patchCardStyles(el);
+}
+
+/** Shadow-scoped corrections. Re-applied until the shadow root exists. */
+function patchCardStyles(el) {
+  const root = el.shadowRoot;
+  if (!root) { requestAnimationFrame(() => patchCardStyles(el)); return; }
+  if (root.getElementById('asyncos-flow-patch')) return;
+  const style = document.createElement('style');
+  style.id = 'asyncos-flow-patch';
+  style.textContent = `
+    .card-content > .row { position: relative; z-index: 2; }
+    .circle-container { position: relative; z-index: 2; }
+    .circle { background: var(--card-background-color, #fff); }
+    .lines { z-index: 1; }
+    .lines svg { overflow: visible; }
+    ha-icon { display: inline-flex; width: var(--mdc-icon-size, 24px); height: var(--mdc-icon-size, 24px); align-items: center; justify-content: center; }
+  `;
+  root.prepend(style);
+}
+
+/** The handful of Home Assistant localisation strings the card asks for. */
+const CARD_LABELS = {
+  solar: 'Solar',
+  grid: 'Grid',
+  home: 'Home',
+  battery: 'Battery',
+  non_fossil: 'Non-fossil',
+  consumption: 'Consumption',
+  return: 'Return',
+  production: 'Production',
+};
+
+/** HA localisation keys are dotted paths; match on the last segment. */
+function cardLocalize(key) {
+  if (!key) return '';
+  const tail = String(key).split('.').pop();
+  return CARD_LABELS[tail] || '';
+}
+
+function makeHass(snap) {
+  return {
+    states: {
+      'sensor.solar_power': { state: String(snap?.pv_w ?? 0), attributes: { unit_of_measurement: 'W', friendly_name: 'Solar' } },
+      'sensor.grid_power': { state: String(snap?.grid_w ?? 0), attributes: { unit_of_measurement: 'W', friendly_name: 'Grid' } },
+      'sensor.home_power': { state: String(snap?.load_w ?? 0), attributes: { unit_of_measurement: 'W', friendly_name: 'Home' } },
+      'sensor.battery_power': { state: String(snap?.genset_w ?? 0), attributes: { unit_of_measurement: 'W', friendly_name: 'Genset' } },
+    },
+    locale: { language: 'en-US' },
+    config: { components: [] },
+    user: { name: 'Controller' },
+    connection: { subscribeMessage: async () => () => {}, sendMessagePromise: async () => ({}) },
+    localize: cardLocalize,
+    formatEntityState: (st) => (st?.state ?? '') + ' ' + (st?.attributes?.unit_of_measurement || ''),
+    formatEntityAttributeValue: (st, attr, value) => value,
+  };
+}
 
 export async function render(main, { can }) {
   const c = colors();
   const head = h('div');
   const alarms = h('div', { class: 'stack' });
   const flowBody = h('div', { class: 'flow' });
+  let flowEl = null;
   const controlBody = h('div');
   const todayBody = h('div', { class: 'stack' }, h('div', { class: 'kpis' }, h('div', { class: 'kpi skeleton' }, '.')));
   const chartBody = h('div');
@@ -26,11 +202,32 @@ export async function render(main, { can }) {
       h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('div', {}, h('h2', {}, 'Today'), h('p', {}, 'Energy since midnight, site time'))), todayBody),
       h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('div', {}, h('h2', {}, 'Power'), h('p', {}, 'Last 15 minutes'))), chartBody)));
 
+  const PowerFlowCard = await loadPowerFlowCard();
+  if (PowerFlowCard) {
+    try {
+      ensureHACardElements();
+      flowEl = document.createElement('power-flow-card-plus');
+      applyCardTheme(flowEl);
+      flowEl.setConfig({
+        type: 'custom:power-flow-card-plus',
+        entities: {
+          solar: { entity: 'sensor.solar_power' },
+          grid: { entity: 'sensor.grid_power' },
+          home: { entity: 'sensor.home_power' },
+          battery: { entity: 'sensor.battery_power', name: 'Genset' },
+        },
+        watt_threshold: 1000,
+        clickable_entities: false,
+      });
+      replace(flowBody, flowEl);
+      } catch (err) { console.error('power flow card render failed', err); console.log(err && err.stack); }
+  }
+
   let lastChart = 0;
   const unsubscribe = live.subscribe((snap, meta) => {
     renderHead(head, snap, meta);
     renderAlarms(alarms, snap);
-    renderFlow(flowBody, snap, c);
+    if (flowEl) { flowEl.hass = makeHass(snap); } else { renderFlow(flowBody, snap, c); }
     renderControl(controlBody, snap, can);
     if (Date.now() - lastChart > 2000) {
       lastChart = Date.now();

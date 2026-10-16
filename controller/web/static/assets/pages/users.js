@@ -39,7 +39,7 @@ export async function render(main, { user: me }) {
         h('td', { class: 'num' }, h('div', { class: 'row', style: { justifyContent: 'flex-end', gap: '4px' } },
           h('button', { class: 'btn sm ghost icon-btn', 'aria-label': 'Edit', 'data-tip': 'Edit role or status', onclick: () => editUser(u) }, icon('edit')),
           h('button', { class: 'btn sm ghost', 'data-tip': 'Set a new password; ends their sessions', onclick: () => resetPassword(u) }, 'Reset password'),
-          u.id !== me.id && h('button', { class: 'btn sm ghost icon-btn danger', 'aria-label': 'Delete', 'data-tip': 'Delete user', onclick: () => deleteUser(u) }, icon('trash')))))))));
+          u.id !== me.id && h('button', { class: 'btn sm ghost icon-btn danger', 'aria-label': 'Delete', 'data-tip': 'Delete user', onclick: () => deleteUser(u) }, icon('trash'))))))))));
   }
 
   async function loadDisplays() {
