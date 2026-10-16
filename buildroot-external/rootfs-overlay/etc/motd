@@ -3,5 +3,5 @@
    [1;38;5;63m▄▀ [1;38;5;45m■[1;38;5;63m ▀▄[0m   [1mWelcome to [1;38;5;63mAsyncOS[0m
    [1;38;5;63m▀     ▀[0m
 
-   [38;5;245mUse `ha` to access the AsyncOS CLI.[0m
+   [38;5;245mRun `asyncos-status` for system status.[0m
 

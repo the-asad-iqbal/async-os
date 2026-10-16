@@ -1,4 +1,5 @@
 name: "Run command in AsyncOS build container"
+description: "Runs a command inside the AsyncOS builder container with the workspace, cache and output mounted"
 inputs:
   image:
     description: "AsyncOS builder image to use"

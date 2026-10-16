@@ -4,6 +4,8 @@ BOOTSTATE_SIZE=8M
 SYSTEM_SIZE=256M
 KERNEL_SIZE=24M
 OVERLAY_SIZE=96M
+# Grown to fill the disk on first boot by haos-expand
+DATA_SIZE=128M
 
 function create_disk_image() {
     if [ -f "${BOARD_DIR}/genimage.cfg" ]; then
@@ -23,13 +25,13 @@ function create_disk_image() {
     ota_version="$(os_version)"
     export ota_compatible ota_version
     # variables used in genimage configs
-    export BOOTSTATE_SIZE SYSTEM_SIZE KERNEL_SIZE OVERLAY_SIZE
+    export BOOTSTATE_SIZE SYSTEM_SIZE KERNEL_SIZE OVERLAY_SIZE DATA_SIZE
     RAUC_MANIFEST=$(tempio -template "${BR2_EXTERNAL_ASYNCOS_PATH}/ota/manifest.raucm.gtpl")
     IMAGE_NAME="$(os_image_basename)"
     BOOT_SPL_TYPE=$(test "$BOOT_SPL" == "true" && echo "spl" || echo "nospl")
     export RAUC_MANIFEST IMAGE_NAME BOOT_SPL_TYPE
     SYSTEM_IMAGE=$(path_rootfs_img)
-    DATA_IMAGE=$(path_data_img)
+    DATA_IMAGE="data.ext4"
     export SYSTEM_IMAGE DATA_IMAGE
 
     trap 'rm -rf "${ROOTPATH_TMP}" "${GENIMAGE_TMPPATH}"' EXIT

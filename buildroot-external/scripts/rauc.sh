@@ -31,19 +31,18 @@ function write_rauc_config() {
 
 function install_rauc_certs() {
     local cert="/build/cert.pem"
+    local release_ca="${BR2_EXTERNAL_ASYNCOS_PATH}/ota/rel-ca.pem"
 
-    if [ "${DEPLOYMENT}" == "development" ]; then
-        # Contains development and release certificate
-        cp "${BR2_EXTERNAL_ASYNCOS_PATH}/ota/dev-ca.pem" "${TARGET_DIR}/etc/rauc/keyring.pem"
+    # Production devices only accept bundles signed under the AsyncOS release
+    # CA. Every other build trusts the certificate it was signed with.
+    if [ "${DEPLOYMENT}" == "production" ]; then
+        if [ ! -f "${release_ca}" ]; then
+            echo "Production builds need the AsyncOS release CA at ${release_ca}" >&2
+            exit 1
+        fi
+        cp "${release_ca}" "${TARGET_DIR}/etc/rauc/keyring.pem"
     else
-        cp "${BR2_EXTERNAL_ASYNCOS_PATH}/ota/rel-ca.pem" "${TARGET_DIR}/etc/rauc/keyring.pem"
-    fi
-
-    # Add local self-signed certificate (if not trusted by the dev or release
-    # certificate it is a self-signed certificate, dev-ca.pem contains both)
-    if ! openssl verify -CAfile "${BR2_EXTERNAL_ASYNCOS_PATH}/ota/dev-ca.pem" -no-CApath "${cert}"; then
-        echo "Adding self-signed certificate to keyring."
-        openssl x509 -in "${cert}" -text >> "${TARGET_DIR}/etc/rauc/keyring.pem"
+        openssl x509 -in "${cert}" -text > "${TARGET_DIR}/etc/rauc/keyring.pem"
     fi
 }
 

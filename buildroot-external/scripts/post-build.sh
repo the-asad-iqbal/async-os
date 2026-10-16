@@ -15,7 +15,6 @@ BOARD_DIR=${2}
 
 # AsyncOS tasks
 fix_rootfs
-install_tini_docker
 setup_localtime
 setup_vconsole
 
@@ -33,8 +32,6 @@ setup_vconsole
     echo "BUG_REPORT_URL=${OS_BUG_REPORT_URL}"
     echo "VARIANT=\"${OS_NAME} ${BOARD_NAME}\""
     echo "VARIANT_ID=${BOARD_ID}"
-    echo "SUPERVISOR_MACHINE=${SUPERVISOR_MACHINE}"
-    echo "SUPERVISOR_ARCH=${SUPERVISOR_ARCH}"
 ) > "${TARGET_DIR}/usr/lib/os-release"
 
 # Write machine-info

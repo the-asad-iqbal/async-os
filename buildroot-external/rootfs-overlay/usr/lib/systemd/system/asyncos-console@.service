@@ -1,0 +1,40 @@
+[Unit]
+Description=AsyncOS console status screen on %I
+After=systemd-user-sessions.service plymouth-quit-wait.service getty-pre.target
+Conflicts=getty@%i.service
+
+# If additional gettys are spawned during boot then we should make
+# sure that this is synchronized before getty.target, even though
+# getty.target didn't actually pull it in.
+Before=getty.target
+
+# IgnoreOnIsolate causes issues with sulogin, if someone isolates
+# rescue.target or starts rescue.service from multi-user.target or
+# graphical.target.
+Conflicts=rescue.service
+Before=rescue.service
+
+# Same value as RestartMaxDelaySec to avoid marking the service as failed
+StartLimitIntervalSec=3s
+
+[Service]
+# A status screen only: no shell or login is reachable from the local console
+ExecStart=/usr/libexec/asyncos-console
+Type=idle
+Restart=always
+RestartSec=100ms
+RestartMaxDelaySec=3s
+RestartSteps=3
+UtmpIdentifier=%I
+TTYPath=/dev/%I
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+IgnoreSIGPIPE=no
+SendSIGHUP=yes
+StandardInput=tty-force
+StandardOutput=inherit
+StandardError=inherit
+
+[Install]
+WantedBy=multi-user.target

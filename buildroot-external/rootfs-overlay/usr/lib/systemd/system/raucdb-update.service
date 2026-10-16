@@ -1,7 +1,6 @@
 [Unit]
 Description=Ensure rauc.db contains version information
 After=rauc.service
-Before=haos-supervisor.service
 RequiresMountsFor=/mnt/boot /mnt/data
 
 [Service]

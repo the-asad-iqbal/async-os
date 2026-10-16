@@ -1,0 +1,17 @@
+#!/bin/sh
+# ==============================================================================
+# AsyncOS console: keeps the device status on screen, refreshed periodically
+# ==============================================================================
+
+REFRESH_SECONDS=30
+
+# Ctrl+C and Ctrl+\ must not end the screen or reach a shell
+trap '' INT QUIT TSTP
+
+while true; do
+    clear
+    /usr/libexec/asyncos-banner --console
+    # Enter refreshes immediately (busybox ash supports read -t)
+    # shellcheck disable=SC3045
+    read -r -t "${REFRESH_SECONDS}" _ || true
+done

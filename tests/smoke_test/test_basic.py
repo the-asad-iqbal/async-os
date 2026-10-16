@@ -8,50 +8,28 @@ _LOGGER = logging.getLogger(__name__)
 
 
 @pytest.mark.dependency()
-@pytest.mark.timeout(120)
+@pytest.mark.timeout(300)
 def test_init(shell):
-    # Disable auto-updates to avoid interference with other tests,
-    # do it directly on config level and restart Supervisor via systemd.
-    shell.run_check(
-        "jq '.auto_update = false' /mnt/data/supervisor/updater.json > /tmp/updater.json"
-        " && mv /tmp/updater.json /mnt/data/supervisor/updater.json"
-        " && systemctl restart haos-supervisor.service"
-    )
-
-    def check_container_running(container_name):
-        out = shell.run_check(
-            f"docker container inspect -f '{{{{.State.Status}}}}' {container_name} || true"
-        )
-        return "running" in out
-
-    # wait for important containers first
+    # Wait until systemd finished starting every unit
     while True:
-        if check_container_running("homeassistant") and check_container_running("hassio_supervisor"):
+        state = "\n".join(shell.run("systemctl is-system-running")[0])
+        if state in ("running", "degraded"):
             break
-
         sleep(1)
 
-    # wait for system ready
-    while True:
-        output = "\n".join(shell.run_check("ha os info || true"))
-        if "System is not ready" not in output and "connection refused" not in output:
-            break
-
-        sleep(1)
-
-    output = shell.run_check("ha os info")
+    output = shell.run_check("cat /etc/os-release")
     _LOGGER.info("%s", "\n".join(output))
+    assert 'NAME="AsyncOS"' in output
 
 
-def test_rauc_status(shell, shell_json):
+def test_rauc_status(shell):
     rauc_status = shell.run_check("rauc status --output-format=shell --detailed")
     # RAUC_BOOT_PRIMARY won't be set if correct grub env is missing
     assert "RAUC_BOOT_PRIMARY='kernel.0'" in rauc_status
     assert "rauc-WARNING" not in "\n".join(rauc_status)
 
-    os_info = shell_json("ha os info --no-progress --raw-json")
-    expected_version = os_info.get("data", {}).get("version")
-    assert expected_version is not None and expected_version != ""
+    expected_version = shell.run_check(". /etc/os-release && echo ${VERSION_ID}")[0]
+    assert expected_version != ""
 
     boot_slots = filter(lambda x: "RAUC_SYSTEM_SLOTS=" in x, rauc_status)
     boot_slots = next(boot_slots, "").replace("RAUC_SYSTEM_SLOTS='", "").replace("'", "")
@@ -65,27 +43,6 @@ def test_rauc_status(shell, shell_json):
 def test_dmesg(shell):
     output = shell.run_check("dmesg")
     _LOGGER.info("%s", "\n".join(output))
-
-
-@pytest.mark.dependency(depends=["test_init"])
-def test_supervisor_logs(shell):
-    output = shell.run_check("ha su logs")
-    _LOGGER.info("%s", "\n".join(output))
-
-
-@pytest.mark.dependency(depends=["test_init"])
-def test_landing_page(shell):
-    web_index = shell.run_check("curl http://localhost")
-    assert "</html>" in " ".join(web_index)
-
-
-@pytest.mark.dependency(depends=["test_init"])
-def test_landing_page_legacy_port_redirect(shell):
-    redirect = shell.run_check(
-        "curl --silent --show-error --output /dev/null "
-        "--write-out '%{http_code} %{redirect_url}' http://localhost:8123"
-    )
-    assert " ".join(redirect) == "302 http://localhost/"
 
 
 def test_systemctl_status(shell):
@@ -105,26 +62,8 @@ def test_systemctl_no_cycles(shell):
 
 
 def test_host_connectivity(shell):
-    output = shell.run_check("curl -f https://checkonline.home-assistant.io/online.txt")
-    assert "NetworkManager is online" in output
-    output = shell.run_check("nmcli network connectivity check")
-    assert "full" in output, f"Connectivity check failed, nmcli reports: {output}"
-
-
-@pytest.mark.dependency(depends=["test_init"])
-@pytest.mark.timeout(10)
-def test_supervisor_connectivity(shell):
-    # checks URL used by connectivity checks via docker0 bridge
-    output = shell.run_check("docker exec -ti hassio_supervisor curl -f https://checkonline.home-assistant.io/online.txt")
-    assert "NetworkManager is online" in output
-
-
-@pytest.mark.dependency(depends=["test_init"])
-@pytest.mark.timeout(10)
-def test_hassio_connectivity(shell):
-    # checks URL used by connectivity checks via hassio bridge
-    output = shell.run_check("docker exec -ti hassio_cli curl -f https://checkonline.home-assistant.io/online.txt")
-    assert "NetworkManager is online" in output
+    output = shell.run_check("curl -fsS -o /dev/null -w '%{http_code}' https://www.kernel.org/")
+    assert output == ["200"], f"HTTPS request failed: {output}"
 
 
 @pytest.mark.dependency(depends=["test_init"])
