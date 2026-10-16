@@ -1,0 +1,20 @@
+{
+  "id": "kostal-sunspec",
+  "manufacturer": "KOSTAL",
+  "model": "PLENTICORE / PIKO IQ (SunSpec)",
+  "kind": "inverter",
+  "connection": {
+    "transport": "tcp",
+    "port": 1502,
+    "unit_id": 71
+  },
+  "sunspec": {
+    "base_addresses": [
+      40000
+    ],
+    "control": false
+  },
+  "verified": false,
+  "source": "KOSTAL Interface MODBUS (TCP) & SunSpec documentation",
+  "notes": "Read only until model 123 control is confirmed on this series. Enable Modbus/SunSpec in the inverter settings; default port 1502, unit ID 71."
+}

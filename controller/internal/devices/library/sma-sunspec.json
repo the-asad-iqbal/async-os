@@ -1,0 +1,20 @@
+{
+  "id": "sma-sunspec",
+  "manufacturer": "SMA",
+  "model": "Sunny Tripower / Sunny Boy (SunSpec)",
+  "kind": "inverter",
+  "connection": {
+    "transport": "tcp",
+    "port": 502,
+    "unit_id": 126
+  },
+  "sunspec": {
+    "base_addresses": [
+      40000
+    ],
+    "control": true
+  },
+  "verified": false,
+  "source": "SMA Technical Information: SunSpec Modbus Interface",
+  "notes": "Enable the Modbus TCP server on the inverter. SMA serves SunSpec on unit ID 126. Active power limiting via Modbus must be allowed in the grid management settings."
+}

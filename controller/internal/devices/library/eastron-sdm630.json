@@ -1,0 +1,88 @@
+{
+  "id": "eastron-sdm630",
+  "manufacturer": "Eastron",
+  "model": "SDM630 Modbus (V2)",
+  "kind": "meter",
+  "connection": {
+    "transport": "rtu",
+    "unit_id": 1,
+    "baud_rate": 9600,
+    "parity": "N",
+    "stop_bits": 1
+  },
+  "points": {
+    "voltage_l1": {
+      "table": "input",
+      "address": 0,
+      "type": "float32"
+    },
+    "voltage_l2": {
+      "table": "input",
+      "address": 2,
+      "type": "float32"
+    },
+    "voltage_l3": {
+      "table": "input",
+      "address": 4,
+      "type": "float32"
+    },
+    "current_l1": {
+      "table": "input",
+      "address": 6,
+      "type": "float32"
+    },
+    "current_l2": {
+      "table": "input",
+      "address": 8,
+      "type": "float32"
+    },
+    "current_l3": {
+      "table": "input",
+      "address": 10,
+      "type": "float32"
+    },
+    "power_l1": {
+      "table": "input",
+      "address": 12,
+      "type": "float32"
+    },
+    "power_l2": {
+      "table": "input",
+      "address": 14,
+      "type": "float32"
+    },
+    "power_l3": {
+      "table": "input",
+      "address": 16,
+      "type": "float32"
+    },
+    "power": {
+      "table": "input",
+      "address": 52,
+      "type": "float32"
+    },
+    "power_factor": {
+      "table": "input",
+      "address": 62,
+      "type": "float32"
+    },
+    "frequency": {
+      "table": "input",
+      "address": 70,
+      "type": "float32"
+    },
+    "energy_import": {
+      "table": "input",
+      "address": 72,
+      "type": "float32"
+    },
+    "energy_export": {
+      "table": "input",
+      "address": 74,
+      "type": "float32"
+    }
+  },
+  "verified": false,
+  "source": "Eastron SDM630 Modbus Protocol",
+  "notes": "Three-phase meter. Power is positive when importing in the meter's wiring direction."
+}

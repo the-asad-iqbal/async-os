@@ -1,0 +1,102 @@
+{
+  "id": "abb-b23",
+  "manufacturer": "ABB",
+  "model": "B23 / B24 (EQ meters)",
+  "kind": "meter",
+  "connection": {
+    "transport": "rtu",
+    "unit_id": 1,
+    "baud_rate": 9600,
+    "parity": "E",
+    "stop_bits": 1
+  },
+  "points": {
+    "energy_import": {
+      "table": "holding",
+      "address": 20480,
+      "type": "uint64",
+      "scale": 0.01
+    },
+    "energy_export": {
+      "table": "holding",
+      "address": 20484,
+      "type": "uint64",
+      "scale": 0.01
+    },
+    "voltage_l1": {
+      "table": "holding",
+      "address": 23296,
+      "type": "uint32",
+      "scale": 0.1
+    },
+    "voltage_l2": {
+      "table": "holding",
+      "address": 23298,
+      "type": "uint32",
+      "scale": 0.1
+    },
+    "voltage_l3": {
+      "table": "holding",
+      "address": 23300,
+      "type": "uint32",
+      "scale": 0.1
+    },
+    "current_l1": {
+      "table": "holding",
+      "address": 23308,
+      "type": "uint32",
+      "scale": 0.01
+    },
+    "current_l2": {
+      "table": "holding",
+      "address": 23310,
+      "type": "uint32",
+      "scale": 0.01
+    },
+    "current_l3": {
+      "table": "holding",
+      "address": 23312,
+      "type": "uint32",
+      "scale": 0.01
+    },
+    "power": {
+      "table": "holding",
+      "address": 23316,
+      "type": "int32",
+      "scale": 0.01
+    },
+    "power_l1": {
+      "table": "holding",
+      "address": 23318,
+      "type": "int32",
+      "scale": 0.01
+    },
+    "power_l2": {
+      "table": "holding",
+      "address": 23320,
+      "type": "int32",
+      "scale": 0.01
+    },
+    "power_l3": {
+      "table": "holding",
+      "address": 23322,
+      "type": "int32",
+      "scale": 0.01
+    },
+    "frequency": {
+      "table": "holding",
+      "address": 23340,
+      "type": "uint16",
+      "scale": 0.01
+    },
+    "power_factor": {
+      "table": "holding",
+      "address": 23354,
+      "type": "int16",
+      "scale": 0.001
+    }
+  },
+  "verified": false,
+  "source": "ABB EQ meters Modbus communication manual",
+  "notes": "Check the serial settings configured on the meter's display."
+}

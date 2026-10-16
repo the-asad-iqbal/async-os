@@ -1,0 +1,20 @@
+{
+  "id": "fronius-sunspec",
+  "manufacturer": "Fronius",
+  "model": "Symo / Primo / Tauro / GEN24 (SunSpec)",
+  "kind": "inverter",
+  "connection": {
+    "transport": "tcp",
+    "port": 502,
+    "unit_id": 1
+  },
+  "sunspec": {
+    "base_addresses": [
+      40000
+    ],
+    "control": true
+  },
+  "verified": false,
+  "source": "Fronius Datamanager / GEN24 Modbus TCP & RTU documentation",
+  "notes": "In the inverter web UI enable Modbus TCP data export and 'Inverter control via Modbus'. Both 'int + SF' and 'float' SunSpec model types are supported."
+}

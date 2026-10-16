@@ -1,0 +1,100 @@
+{
+  "id": "chint-dtsu666",
+  "manufacturer": "CHINT",
+  "model": "DTSU666 three-phase meter",
+  "kind": "meter",
+  "connection": {
+    "transport": "rtu",
+    "unit_id": 1,
+    "baud_rate": 9600,
+    "parity": "N",
+    "stop_bits": 1
+  },
+  "points": {
+    "voltage_l1": {
+      "table": "holding",
+      "address": 8198,
+      "type": "float32",
+      "scale": 0.1
+    },
+    "voltage_l2": {
+      "table": "holding",
+      "address": 8200,
+      "type": "float32",
+      "scale": 0.1
+    },
+    "voltage_l3": {
+      "table": "holding",
+      "address": 8202,
+      "type": "float32",
+      "scale": 0.1
+    },
+    "current_l1": {
+      "table": "holding",
+      "address": 8204,
+      "type": "float32",
+      "scale": 0.001
+    },
+    "current_l2": {
+      "table": "holding",
+      "address": 8206,
+      "type": "float32",
+      "scale": 0.001
+    },
+    "current_l3": {
+      "table": "holding",
+      "address": 8208,
+      "type": "float32",
+      "scale": 0.001
+    },
+    "power": {
+      "table": "holding",
+      "address": 8210,
+      "type": "float32",
+      "scale": 0.1
+    },
+    "power_l1": {
+      "table": "holding",
+      "address": 8212,
+      "type": "float32",
+      "scale": 0.1
+    },
+    "power_l2": {
+      "table": "holding",
+      "address": 8214,
+      "type": "float32",
+      "scale": 0.1
+    },
+    "power_l3": {
+      "table": "holding",
+      "address": 8216,
+      "type": "float32",
+      "scale": 0.1
+    },
+    "power_factor": {
+      "table": "holding",
+      "address": 8234,
+      "type": "float32",
+      "scale": 0.001
+    },
+    "frequency": {
+      "table": "holding",
+      "address": 8260,
+      "type": "float32",
+      "scale": 0.01
+    },
+    "energy_import": {
+      "table": "holding",
+      "address": 16414,
+      "type": "float32"
+    },
+    "energy_export": {
+      "table": "holding",
+      "address": 16424,
+      "type": "float32"
+    }
+  },
+  "verified": false,
+  "source": "CHINT DTSU666 Modbus communication protocol",
+  "notes": "Generic DTSU666 firmware. Inverter-branded variants (for example DTSU666-H for Huawei) use a different map."
+}

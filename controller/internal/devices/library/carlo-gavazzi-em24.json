@@ -1,0 +1,88 @@
+{
+  "id": "carlo-gavazzi-em24",
+  "manufacturer": "Carlo Gavazzi",
+  "model": "EM24 DIN",
+  "kind": "meter",
+  "connection": {
+    "transport": "rtu",
+    "unit_id": 1,
+    "baud_rate": 9600,
+    "parity": "N",
+    "stop_bits": 1
+  },
+  "points": {
+    "voltage_l1": {
+      "table": "holding",
+      "address": 0,
+      "type": "int32",
+      "word_order": "low_first",
+      "scale": 0.1
+    },
+    "voltage_l2": {
+      "table": "holding",
+      "address": 2,
+      "type": "int32",
+      "word_order": "low_first",
+      "scale": 0.1
+    },
+    "voltage_l3": {
+      "table": "holding",
+      "address": 4,
+      "type": "int32",
+      "word_order": "low_first",
+      "scale": 0.1
+    },
+    "current_l1": {
+      "table": "holding",
+      "address": 12,
+      "type": "int32",
+      "word_order": "low_first",
+      "scale": 0.001
+    },
+    "current_l2": {
+      "table": "holding",
+      "address": 14,
+      "type": "int32",
+      "word_order": "low_first",
+      "scale": 0.001
+    },
+    "current_l3": {
+      "table": "holding",
+      "address": 16,
+      "type": "int32",
+      "word_order": "low_first",
+      "scale": 0.001
+    },
+    "power_l1": {
+      "table": "holding",
+      "address": 18,
+      "type": "int32",
+      "word_order": "low_first",
+      "scale": 0.1
+    },
+    "power_l2": {
+      "table": "holding",
+      "address": 20,
+      "type": "int32",
+      "word_order": "low_first",
+      "scale": 0.1
+    },
+    "power_l3": {
+      "table": "holding",
+      "address": 22,
+      "type": "int32",
+      "word_order": "low_first",
+      "scale": 0.1
+    },
+    "power": {
+      "table": "holding",
+      "address": 40,
+      "type": "int32",
+      "word_order": "low_first",
+      "scale": 0.1
+    }
+  },
+  "verified": false,
+  "source": "Carlo Gavazzi EM24 communication protocol",
+  "notes": "32-bit values are sent low word first. Energy counters are not mapped yet; energy is integrated from power."
+}

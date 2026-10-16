@@ -1,0 +1,20 @@
+{
+  "id": "solaredge-sunspec",
+  "manufacturer": "SolarEdge",
+  "model": "Inverter with SetApp / display (SunSpec)",
+  "kind": "inverter",
+  "connection": {
+    "transport": "tcp",
+    "port": 1502,
+    "unit_id": 1
+  },
+  "sunspec": {
+    "base_addresses": [
+      40000
+    ],
+    "control": false
+  },
+  "verified": false,
+  "source": "SolarEdge SunSpec Implementation Technical Note",
+  "notes": "Read only. SolarEdge power control uses proprietary registers that require Advanced Power Control; add a dedicated profile once verified. Enable Modbus TCP in SetApp (default port 1502)."
+}

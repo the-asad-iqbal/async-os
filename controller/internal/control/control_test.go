@@ -1,0 +1,329 @@
+package control
+
+import (
+	"math"
+	"testing"
+	"time"
+)
+
+var t0 = time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)
+
+func controlSettings() Settings {
+	s := DefaultSettings()
+	s.Mode = ModeControl
+	return s
+}
+
+func grid(powerW float64, at time.Time) *Meter {
+	return &Meter{ID: "grid", Online: true, Updated: at, PowerW: powerW, VoltageV: 230}
+}
+
+func inverter(id string, powerW, ratedW float64, at time.Time) Inverter {
+	return Inverter{ID: id, Online: true, Updated: at, PowerW: powerW, RatedW: ratedW, Controllable: true}
+}
+
+func hasAlarm(d Decision, code string) bool {
+	for _, a := range d.Alarms {
+		if a.Code == code {
+			return true
+		}
+	}
+	return false
+}
+
+func TestDefaultSettingsAreValid(t *testing.T) {
+	if err := DefaultSettings().Validate(); err != nil {
+		t.Fatal(err)
+	}
+	s := DefaultSettings()
+	s.ExportLimitW = -1
+	if s.Validate() == nil {
+		t.Fatal("negative export limit accepted")
+	}
+}
+
+func TestZeroExportRampsUpFromCurrentOutput(t *testing.T) {
+	s := controlSettings()
+	var st State
+	// Importing 2 kW while producing 5 kW of 10 kW: 1.8 kW of headroom.
+	m := Measurements{Now: t0, Grid: grid(2000, t0), Inverters: []Inverter{inverter("inv", 5000, 10000, t0)}}
+	d := Step(s, m, &st)
+	if d.Status != StatusCurtailing || d.Binding != "grid" || d.HeadroomW != 1800 {
+		t.Fatalf("decision = %+v", d)
+	}
+	if d.LimitPct != 50 || !d.Send {
+		t.Fatalf("first cycle should hold current output: %+v", d)
+	}
+
+	m.Now = t0.Add(time.Second)
+	m.Grid.Updated, m.Inverters[0].Updated = m.Now, m.Now
+	d = Step(s, m, &st)
+	if d.LimitPct != 55 { // +5 %/s of 10 kW
+		t.Fatalf("ramp = %v %%, want 55", d.LimitPct)
+	}
+}
+
+func TestExportBreachCutsImmediately(t *testing.T) {
+	s := controlSettings()
+	var st State
+	m := Measurements{Now: t0, Grid: grid(0, t0), Inverters: []Inverter{inverter("inv", 8000, 10000, t0)}}
+	if d := Step(s, m, &st); d.LimitW != 7800 {
+		t.Fatalf("first limit = %v, want 7800", d.LimitW)
+	}
+
+	// The inverter followed its command, then the load drops and the site
+	// exports 1.5 kW: cut by export + margin at once.
+	m.Now = t0.Add(time.Second)
+	m.Grid = grid(-1500, m.Now)
+	m.Inverters[0] = inverter("inv", 7800, 10000, m.Now)
+	d := Step(s, m, &st)
+	if d.LimitW != 6100 || !d.Send {
+		t.Fatalf("decision = %+v", d)
+	}
+}
+
+func TestBreachWithLaggingInverterPushesHarder(t *testing.T) {
+	s := controlSettings()
+	var st State
+	m := Measurements{Now: t0, Grid: grid(0, t0), Inverters: []Inverter{inverter("inv", 8000, 10000, t0)}}
+	Step(s, m, &st) // commands 7800 W
+
+	// The inverter is still at 8000 W, above its 7800 W command, while
+	// the site exports: lower the command from 7800 W with double gain.
+	m.Now = t0.Add(time.Second)
+	m.Grid = grid(-1500, m.Now)
+	m.Inverters[0].Updated = m.Now
+	d := Step(s, m, &st)
+	if d.LimitW != 7800-2*1700 {
+		t.Fatalf("limit = %v, want 4400", d.LimitW)
+	}
+}
+
+func TestExportLimitAboveZero(t *testing.T) {
+	s := controlSettings()
+	s.ExportLimitW = 3000
+	var st State
+	m := Measurements{Now: t0, Grid: grid(-2000, t0), Inverters: []Inverter{inverter("inv", 9000, 20000, t0)}}
+	d := Step(s, m, &st)
+	if d.HeadroomW != 800 {
+		t.Fatalf("headroom = %v, want 800", d.HeadroomW)
+	}
+}
+
+func TestExportAlarmAfterDelay(t *testing.T) {
+	s := controlSettings()
+	var st State
+	for i := range 12 {
+		now := t0.Add(time.Duration(i) * time.Second)
+		m := Measurements{Now: now, Grid: grid(-500, now), Inverters: []Inverter{inverter("inv", 0, 10000, now)}}
+		d := Step(s, m, &st)
+		if alarmed := hasAlarm(d, AlarmExportExceeded); alarmed != (i >= 10) {
+			t.Fatalf("second %d: export alarm = %v", i, alarmed)
+		}
+	}
+}
+
+func TestGensetMinimumLoad(t *testing.T) {
+	s := controlSettings()
+	var st State
+	// 50 kW genset carrying 18 kW, minimum 30 % = 15 kW, margin 500 W.
+	m := Measurements{
+		Now:       t0,
+		Gensets:   []Genset{{Meter: Meter{ID: "dg1", Online: true, Updated: t0, PowerW: 18000}, RatedW: 50000}},
+		Inverters: []Inverter{inverter("inv", 10000, 30000, t0)},
+	}
+	d := Step(s, m, &st)
+	if d.Binding != "genset" || d.HeadroomW != 2500 || d.GensetMinLoadW != 15000 || d.GensetsRunning != 1 {
+		t.Fatalf("decision = %+v", d)
+	}
+}
+
+func TestGensetReversePowerIsCritical(t *testing.T) {
+	s := controlSettings()
+	var st State
+	m := Measurements{
+		Now:       t0,
+		Gensets:   []Genset{{Meter: Meter{ID: "dg1", Online: true, Updated: t0, PowerW: -800}, RatedW: 50000}},
+		Inverters: []Inverter{inverter("inv", 20000, 30000, t0)},
+	}
+	d := Step(s, m, &st)
+	if !hasAlarm(d, AlarmGensetReversePower) {
+		t.Fatal("no reverse power alarm")
+	}
+	// -800 - 15000 - 500 = -16300 W of headroom: shed hard.
+	if d.LimitW != 3700 {
+		t.Fatalf("limit = %v, want 3700", d.LimitW)
+	}
+}
+
+func TestTightestConstraintWins(t *testing.T) {
+	s := controlSettings()
+	var st State
+	m := Measurements{
+		Now:       t0,
+		Grid:      grid(5000, t0), // grid allows 4800 W more
+		Gensets:   []Genset{{Meter: Meter{ID: "dg1", Online: true, Updated: t0, PowerW: 16000}, RatedW: 50000}},
+		Inverters: []Inverter{inverter("inv", 10000, 30000, t0)},
+	}
+	d := Step(s, m, &st)
+	if d.Binding != "genset" || d.HeadroomW != 500 {
+		t.Fatalf("decision = %+v", d)
+	}
+}
+
+func TestStaleGridMeterTriggersFailsafe(t *testing.T) {
+	s := controlSettings()
+	s.FailsafeLimitPct = 10
+	var st State
+	stale := t0.Add(-10 * time.Second)
+	m := Measurements{Now: t0, Grid: grid(0, stale), Inverters: []Inverter{inverter("inv", 9000, 10000, t0)}}
+	d := Step(s, m, &st)
+	if d.Status != StatusFailsafe || d.LimitPct != 10 || !d.Send || !hasAlarm(d, AlarmGridMeterOffline) {
+		t.Fatalf("decision = %+v", d)
+	}
+
+	// Recovery ramps up from the fail-safe level instead of jumping.
+	m.Now = t0.Add(time.Second)
+	m.Grid = grid(5000, m.Now)
+	m.Inverters[0] = inverter("inv", 1000, 10000, m.Now)
+	d = Step(s, m, &st)
+	if d.Status != StatusCurtailing || d.LimitPct != 15 {
+		t.Fatalf("recovery = %+v", d)
+	}
+}
+
+func TestMonitorModeNeverWritesUntilReleased(t *testing.T) {
+	s := controlSettings()
+	var st State
+	m := Measurements{Now: t0, Grid: grid(-3000, t0), Inverters: []Inverter{inverter("inv", 9000, 10000, t0)}}
+	if d := Step(s, m, &st); !d.Send || d.LimitPct >= 100 {
+		t.Fatalf("control cycle = %+v", d)
+	}
+
+	s.Mode = ModeMonitor
+	d := Step(s, m, &st)
+	if d.Status != StatusMonitoring || !d.Send || d.LimitPct != 100 {
+		t.Fatalf("switching to monitor should release once: %+v", d)
+	}
+	if d = Step(s, m, &st); d.Send {
+		t.Fatal("monitor mode wrote again")
+	}
+
+	var fresh State
+	if d = Step(s, m, &fresh); d.Send {
+		t.Fatal("monitor mode wrote without a previous limit")
+	}
+}
+
+func TestWritePolicy(t *testing.T) {
+	s := controlSettings()
+	var st State
+	at := func(sec int, gridW, pvW float64) Decision {
+		now := t0.Add(time.Duration(sec) * time.Second)
+		return Step(s, Measurements{Now: now, Grid: grid(gridW, now), Inverters: []Inverter{inverter("inv", pvW, 10000, now)}}, &st)
+	}
+	if d := at(0, -1000, 5000); !d.Send {
+		t.Fatal("first limit not sent")
+	}
+	// Headroom 30 W: an increase of 0.3 % is below the 1 % step.
+	if d := at(1, 230, 3800); d.Send {
+		t.Fatalf("tiny increase sent: %+v", d)
+	}
+	// A breach is always sent, however small.
+	if d := at(2, -50, 3800); !d.Send {
+		t.Fatalf("breach not sent: %+v", d)
+	}
+	// Keepalive after 60 s with no change.
+	if d := at(63, 200, 3550); !d.Send {
+		t.Fatalf("keepalive not sent: %+v", d)
+	}
+}
+
+func TestUncontrollableInverterIsExcluded(t *testing.T) {
+	s := controlSettings()
+	var st State
+	ro := inverter("ro", 4000, 5000, t0)
+	ro.Controllable = false
+	m := Measurements{Now: t0, Grid: grid(1000, t0), Inverters: []Inverter{inverter("inv", 5000, 10000, t0), ro}}
+	d := Step(s, m, &st)
+	if d.ControllableW != 10000 || d.PVPowerW != 9000 || !hasAlarm(d, AlarmInverterUncontrolled) {
+		t.Fatalf("decision = %+v", d)
+	}
+}
+
+func TestNoConstraintRunsUnlimited(t *testing.T) {
+	s := controlSettings()
+	var st State
+	d := Step(s, Measurements{Now: t0, Inverters: []Inverter{inverter("inv", 5000, 10000, t0)}}, &st)
+	if d.Status != StatusUnlimited || d.LimitPct != 100 || !math.IsNaN(d.HeadroomW) {
+		t.Fatalf("decision = %+v", d)
+	}
+}
+
+func TestGridOutageWithoutGensetRaisesNoSource(t *testing.T) {
+	s := controlSettings()
+	var st State
+	g := grid(0, t0)
+	g.VoltageV = 3
+	d := Step(s, Measurements{Now: t0, Grid: g, Inverters: []Inverter{inverter("inv", 0, 10000, t0)}}, &st)
+	if d.GridPresent || !hasAlarm(d, AlarmNoSource) {
+		t.Fatalf("decision = %+v", d)
+	}
+}
+
+// TestClosedLoop runs the controller against a simple site model for ten
+// minutes of swinging load, moving sun and sudden 20+ kW load drops, with
+// slow, medium and fast inverters.
+func TestClosedLoop(t *testing.T) {
+	for _, response := range []float64{0.3, 0.6, 0.9} {
+		s := controlSettings()
+		s.ExportLimitW = 1000
+		const rated = 50000.0
+		var st State
+
+		pv, limit := 0.0, rated
+		var exports []float64
+		overshootSeconds := 0
+		for sec := range 600 {
+			now := t0.Add(time.Duration(sec) * time.Second)
+			phase := sec % 120
+			load := 30000 + 15000*math.Sin(float64(sec)/40)
+			if phase > 100 {
+				load = 8000
+			}
+			sun := rated * (0.6 + 0.4*math.Sin(float64(sec)/25))
+
+			// The inverter moves a fraction of the way to its target
+			// each second.
+			pv += response * (math.Min(sun, limit) - pv)
+			gridW := load - pv
+			exports = append(exports, -gridW)
+
+			// Right after a sudden drop the inverter lag is physics, not
+			// the controller: skip those seconds.
+			afterStep := (phase > 100 && phase < 107) || phase < 3
+			if !afterStep && -gridW > s.ExportLimitW+100 {
+				overshootSeconds++
+			}
+
+			d := Step(s, Measurements{Now: now, Grid: grid(gridW, now), Inverters: []Inverter{inverter("inv", pv, rated, now)}}, &st)
+			if d.Send {
+				limit = d.LimitW
+			}
+		}
+
+		if overshootSeconds > 15 {
+			t.Errorf("response %.1f: export above limit + 100 W for %d s", response, overshootSeconds)
+		}
+		for i := 60; i <= len(exports); i++ {
+			mean := 0.0
+			for _, e := range exports[i-60 : i] {
+				mean += e / 60
+			}
+			if mean > s.ExportLimitW {
+				t.Errorf("response %.1f: 60 s mean export %.0f W ending at %d s is above the limit", response, mean, i)
+				break
+			}
+		}
+	}
+}

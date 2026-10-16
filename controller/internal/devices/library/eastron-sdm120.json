@@ -1,0 +1,53 @@
+{
+  "id": "eastron-sdm120",
+  "manufacturer": "Eastron",
+  "model": "SDM120 / SDM230 Modbus",
+  "kind": "meter",
+  "connection": {
+    "transport": "rtu",
+    "unit_id": 1,
+    "baud_rate": 2400,
+    "parity": "N",
+    "stop_bits": 1
+  },
+  "points": {
+    "voltage_l1": {
+      "table": "input",
+      "address": 0,
+      "type": "float32"
+    },
+    "current_l1": {
+      "table": "input",
+      "address": 6,
+      "type": "float32"
+    },
+    "power": {
+      "table": "input",
+      "address": 12,
+      "type": "float32"
+    },
+    "power_factor": {
+      "table": "input",
+      "address": 30,
+      "type": "float32"
+    },
+    "frequency": {
+      "table": "input",
+      "address": 70,
+      "type": "float32"
+    },
+    "energy_import": {
+      "table": "input",
+      "address": 72,
+      "type": "float32"
+    },
+    "energy_export": {
+      "table": "input",
+      "address": 74,
+      "type": "float32"
+    }
+  },
+  "verified": false,
+  "source": "Eastron SDM120 / SDM230 Modbus Protocol",
+  "notes": "Single-phase meter. Factory baud rate is 2400 on the SDM120 and 9600 on the SDM230; set what the meter is configured for."
+}

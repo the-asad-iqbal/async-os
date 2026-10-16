@@ -1,0 +1,92 @@
+{
+  "id": "growatt-tl3",
+  "manufacturer": "Growatt",
+  "model": "MID / MAX TL3 (protocol V1.20)",
+  "kind": "inverter",
+  "connection": {
+    "transport": "rtu",
+    "unit_id": 1,
+    "baud_rate": 9600,
+    "parity": "N",
+    "stop_bits": 1
+  },
+  "points": {
+    "power": {
+      "table": "input",
+      "address": 35,
+      "type": "uint32",
+      "scale": 0.1
+    },
+    "dc_power": {
+      "table": "input",
+      "address": 1,
+      "type": "uint32",
+      "scale": 0.1
+    },
+    "energy_total": {
+      "table": "input",
+      "address": 55,
+      "type": "uint32",
+      "scale": 0.1
+    },
+    "frequency": {
+      "table": "input",
+      "address": 37,
+      "type": "uint16",
+      "scale": 0.01
+    },
+    "voltage_l1": {
+      "table": "input",
+      "address": 38,
+      "type": "uint16",
+      "scale": 0.1
+    },
+    "current_l1": {
+      "table": "input",
+      "address": 39,
+      "type": "uint16",
+      "scale": 0.1
+    },
+    "voltage_l2": {
+      "table": "input",
+      "address": 42,
+      "type": "uint16",
+      "scale": 0.1
+    },
+    "current_l2": {
+      "table": "input",
+      "address": 43,
+      "type": "uint16",
+      "scale": 0.1
+    },
+    "voltage_l3": {
+      "table": "input",
+      "address": 46,
+      "type": "uint16",
+      "scale": 0.1
+    },
+    "current_l3": {
+      "table": "input",
+      "address": 47,
+      "type": "uint16",
+      "scale": 0.1
+    },
+    "power_limit": {
+      "table": "holding",
+      "address": 3,
+      "type": "uint16"
+    }
+  },
+  "controls": {
+    "power_limit": {
+      "table": "holding",
+      "address": 3,
+      "type": "uint16",
+      "min": 0,
+      "max": 100
+    }
+  },
+  "verified": false,
+  "source": "Growatt Inverter Modbus RTU Protocol V1.20",
+  "notes": "Covers inverters on the classic Growatt register map. MIN/MOD TL-X(H) series use the 3000+ register range and need their own profile. Holding register 3 may be stored in EEPROM on some firmware; the controller only writes it when the setpoint changes."
+}

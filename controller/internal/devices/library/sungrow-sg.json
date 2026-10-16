@@ -1,0 +1,105 @@
+{
+  "id": "sungrow-sg",
+  "manufacturer": "Sungrow",
+  "model": "SG string inverters (RT / CX)",
+  "kind": "inverter",
+  "connection": {
+    "transport": "tcp",
+    "port": 502,
+    "unit_id": 1
+  },
+  "points": {
+    "power": {
+      "table": "input",
+      "address": 5030,
+      "type": "uint32",
+      "word_order": "low_first"
+    },
+    "dc_power": {
+      "table": "input",
+      "address": 5016,
+      "type": "uint32",
+      "word_order": "low_first"
+    },
+    "rated_power": {
+      "table": "input",
+      "address": 5000,
+      "type": "uint16",
+      "scale": 100
+    },
+    "energy_total": {
+      "table": "input",
+      "address": 5003,
+      "type": "uint32",
+      "word_order": "low_first"
+    },
+    "voltage_l1": {
+      "table": "input",
+      "address": 5018,
+      "type": "uint16",
+      "scale": 0.1
+    },
+    "voltage_l2": {
+      "table": "input",
+      "address": 5019,
+      "type": "uint16",
+      "scale": 0.1
+    },
+    "voltage_l3": {
+      "table": "input",
+      "address": 5020,
+      "type": "uint16",
+      "scale": 0.1
+    },
+    "current_l1": {
+      "table": "input",
+      "address": 5021,
+      "type": "uint16",
+      "scale": 0.1
+    },
+    "current_l2": {
+      "table": "input",
+      "address": 5022,
+      "type": "uint16",
+      "scale": 0.1
+    },
+    "current_l3": {
+      "table": "input",
+      "address": 5023,
+      "type": "uint16",
+      "scale": 0.1
+    },
+    "frequency": {
+      "table": "input",
+      "address": 5035,
+      "type": "uint16",
+      "scale": 0.1
+    },
+    "power_limit": {
+      "table": "holding",
+      "address": 5007,
+      "type": "uint16",
+      "scale": 0.1
+    }
+  },
+  "controls": {
+    "power_limit": {
+      "table": "holding",
+      "address": 5007,
+      "type": "uint16",
+      "scale": 0.1,
+      "min": 0,
+      "max": 100,
+      "enable": {
+        "table": "holding",
+        "address": 5006,
+        "values": [
+          170
+        ]
+      }
+    }
+  },
+  "verified": false,
+  "source": "Sungrow Communication Protocol for PV Grid-Connected String Inverters",
+  "notes": "Sungrow manuals number registers from 1; addresses here are one lower. 32-bit values are sent low word first. Connect over the WiNet-S dongle or the inverter's own Ethernet port."
+}

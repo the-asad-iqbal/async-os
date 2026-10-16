@@ -1,0 +1,22 @@
+{
+  "id": "sunspec-inverter",
+  "manufacturer": "SunSpec",
+  "model": "Generic SunSpec inverter",
+  "kind": "inverter",
+  "connection": {
+    "transport": "tcp",
+    "port": 502,
+    "unit_id": 1
+  },
+  "sunspec": {
+    "base_addresses": [
+      40000,
+      0,
+      50000
+    ],
+    "control": true
+  },
+  "verified": false,
+  "source": "SunSpec Information Model Specification, models 101-103, 111-113, 120 and 123",
+  "notes": "Works with most inverters that implement SunSpec over Modbus TCP. Models are discovered at runtime. Power limiting uses model 123 (WMaxLimPct) with the revert timeout disabled."
+}

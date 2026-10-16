@@ -1,0 +1,101 @@
+{
+  "id": "huawei-sun2000",
+  "manufacturer": "Huawei",
+  "model": "SUN2000 (KTL/M series)",
+  "kind": "inverter",
+  "connection": {
+    "transport": "tcp",
+    "port": 502,
+    "unit_id": 1
+  },
+  "points": {
+    "power": {
+      "table": "holding",
+      "address": 32080,
+      "type": "int32"
+    },
+    "dc_power": {
+      "table": "holding",
+      "address": 32064,
+      "type": "int32"
+    },
+    "rated_power": {
+      "table": "holding",
+      "address": 30073,
+      "type": "uint32"
+    },
+    "energy_total": {
+      "table": "holding",
+      "address": 32106,
+      "type": "uint32",
+      "scale": 0.01
+    },
+    "voltage_l1": {
+      "table": "holding",
+      "address": 32069,
+      "type": "uint16",
+      "scale": 0.1
+    },
+    "voltage_l2": {
+      "table": "holding",
+      "address": 32070,
+      "type": "uint16",
+      "scale": 0.1
+    },
+    "voltage_l3": {
+      "table": "holding",
+      "address": 32071,
+      "type": "uint16",
+      "scale": 0.1
+    },
+    "current_l1": {
+      "table": "holding",
+      "address": 32072,
+      "type": "int32",
+      "scale": 0.001
+    },
+    "current_l2": {
+      "table": "holding",
+      "address": 32074,
+      "type": "int32",
+      "scale": 0.001
+    },
+    "current_l3": {
+      "table": "holding",
+      "address": 32076,
+      "type": "int32",
+      "scale": 0.001
+    },
+    "power_factor": {
+      "table": "holding",
+      "address": 32084,
+      "type": "int16",
+      "scale": 0.001
+    },
+    "frequency": {
+      "table": "holding",
+      "address": 32085,
+      "type": "uint16",
+      "scale": 0.01
+    },
+    "power_limit": {
+      "table": "holding",
+      "address": 40125,
+      "type": "int16",
+      "scale": 0.1
+    }
+  },
+  "controls": {
+    "power_limit": {
+      "table": "holding",
+      "address": 40125,
+      "type": "int16",
+      "scale": 0.1,
+      "min": 0,
+      "max": 100
+    }
+  },
+  "verified": false,
+  "source": "Huawei SUN2000 Modbus Interface Definitions",
+  "notes": "Through an SDongle the inverter is usually unit ID 1; over the inverter's own WLAN it is unit ID 0. Huawei needs a short pause after connecting before the first request. Power values are in W (kW with gain 1000)."
+}

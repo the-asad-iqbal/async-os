@@ -1,0 +1,22 @@
+{
+  "id": "sunspec-meter",
+  "manufacturer": "SunSpec",
+  "model": "Generic SunSpec meter",
+  "kind": "meter",
+  "connection": {
+    "transport": "tcp",
+    "port": 502,
+    "unit_id": 1
+  },
+  "sunspec": {
+    "base_addresses": [
+      40000,
+      0,
+      50000
+    ],
+    "control": false
+  },
+  "verified": false,
+  "source": "SunSpec Information Model Specification, models 201-203 and 211-213",
+  "notes": "For meters exposed through SunSpec, for example a Fronius Smart Meter behind a Datamanager (unit ID 200 or 240). Check the power sign during commissioning."
+}
