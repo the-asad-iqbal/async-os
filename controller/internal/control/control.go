@@ -197,12 +197,26 @@ type Inverter struct {
 	Controllable bool
 }
 
+// SourceMeter is a single meter fed by the grid or, through an ATS, by a
+// genset. Its running signal says which.
+type SourceMeter struct {
+	Meter
+	// RatedW and MinLoadW describe the genset behind the ATS.
+	RatedW   float64
+	MinLoadW float64
+	// GensetRunning is the raw running signal from the meter.
+	GensetRunning bool
+}
+
 // Measurements are the inputs to one control cycle.
 type Measurements struct {
 	Now       time.Time
 	Grid      *Meter // nil when the site has no grid connection
 	Gensets   []Genset
 	Inverters []Inverter
+	// Source is a grid/genset meter behind an ATS. It acts as the grid
+	// meter or as a genset meter, depending on its debounced signal.
+	Source *SourceMeter
 }
 
 // Status summarizes what the controller is doing.
@@ -257,6 +271,9 @@ type Decision struct {
 	// Binding names the constraint that set the limit: "grid", "genset"
 	// or "" when none did.
 	Binding string `json:"binding"`
+	// Source is what feeds a grid/genset (ATS) meter right now: "grid" or
+	// "genset", after debouncing. Empty without such a meter.
+	Source string `json:"source,omitempty"`
 
 	PVPowerW       float64 `json:"pv_power_w"`
 	ControllableW  float64 `json:"controllable_rated_w"`
@@ -284,6 +301,25 @@ func Step(s Settings, m Measurements, state *State) Decision {
 
 	fresh := func(online bool, updated time.Time) bool {
 		return online && m.Now.Sub(updated) <= s.MeasurementTimeout.D()
+	}
+
+	// A grid/genset meter takes the role its source calls for.
+	if sm := m.Source; sm != nil {
+		switch {
+		case !fresh(sm.Online, sm.Updated):
+			// Unknown source: the grid path raises the fail-safe.
+			meter := sm.Meter
+			m.Grid = &meter
+		case state.debounce(sm.ID+"#source", sm.GensetRunning, m.Now, s.SourceDebounce.D()):
+			d.Source = "genset"
+			running := true
+			m.Gensets = append(append([]Genset(nil), m.Gensets...),
+				Genset{Meter: sm.Meter, RatedW: sm.RatedW, MinLoadW: sm.MinLoadW, Running: &running})
+		default:
+			d.Source = "grid"
+			meter := sm.Meter
+			m.Grid = &meter
+		}
 	}
 
 	// Inverters: what is producing, and what we can curtail.

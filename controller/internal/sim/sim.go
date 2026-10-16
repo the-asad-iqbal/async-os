@@ -34,6 +34,16 @@ const (
 	// ScenarioHybrid alternates four minutes on grid with two minutes of
 	// grid outage, when a genset carries the site.
 	ScenarioHybrid Scenario = "hybrid"
+	// ScenarioATS has one meter behind an ATS that sees the grid or the
+	// genset, with a digital input for "genset running". Like the meters
+	// on real sites, its kWh counters freeze while the genset runs.
+	ScenarioATS Scenario = "ats"
+)
+
+// Unit and register of the ATS meter's running signal (digital input 1).
+const (
+	UnitATSMeter       = 10
+	ATSRunningRegister = 500
 )
 
 // Site is a running simulation.
@@ -46,6 +56,8 @@ type Site struct {
 	inverters []*simInverter
 	grid      *devices.SunSpecMeterSim
 	genset    *sdm630
+	ats       *sdm630
+	atsKWh    [2]float64 // import, export
 	gensetW   float64
 
 	// GridOn and GridOff set the hybrid scenario's grid cycle (default
@@ -88,6 +100,8 @@ func Start(address string, scenario Scenario) (*Site, error) {
 	}
 	s.grid = devices.SimulateSunSpecMeter(bank, UnitGridMeter, 40000)
 	s.genset = newSDM630(bank, UnitGensetMeter)
+	s.ats = newSDM630(bank, UnitATSMeter)
+	bank.SetHolding(UnitATSMeter, ATSRunningRegister, 0)
 
 	s.server = modbus.NewServer(bank)
 	bound, err := s.server.Listen(address)
@@ -131,7 +145,7 @@ func (s *Site) GridAvailable() bool {
 }
 
 func (s *Site) gridAvailableLocked() bool {
-	if s.scenario != ScenarioHybrid {
+	if s.scenario != ScenarioHybrid && s.scenario != ScenarioATS {
 		return true
 	}
 	cycle := s.GridOn + s.GridOff
@@ -193,6 +207,24 @@ func (s *Site) Step(dt time.Duration) {
 		s.genset.addEnergy(math.Max(0, s.gensetW) * sec / 3600 / 1000)
 	}
 	s.grid.SetVoltage(map[bool]float64{true: 230, false: 0}[gridUp])
+
+	// The ATS meter sees whichever source feeds the site.
+	atsW := s.load - s.pv
+	s.ats.set(atsW, 230)
+	running := uint16(0)
+	if !gridUp {
+		running = 1
+	}
+	s.bank.SetHolding(UnitATSMeter, ATSRunningRegister, running)
+	if gridUp { // counters freeze on genset
+		if atsW >= 0 {
+			s.atsKWh[0] += atsW * sec / 3600 / 1000
+		} else {
+			s.atsKWh[1] += -atsW * sec / 3600 / 1000
+		}
+		s.ats.put(72, s.atsKWh[0])
+		s.ats.put(74, s.atsKWh[1])
+	}
 }
 
 // Config returns a site configuration that points at the simulation.
@@ -206,6 +238,14 @@ func (s *Site) Config() plant.Site {
 		{ID: "grid", Name: "Grid meter", Profile: "sunspec-meter", Role: plant.RoleGridMeter, BusID: "sim", UnitID: UnitGridMeter, Enabled: true},
 		{ID: "inv-1", Name: "Inverter 1 (30 kW)", Profile: "sunspec-inverter", Role: plant.RolePVInverter, BusID: "sim", UnitID: UnitInverter1, Enabled: true},
 		{ID: "inv-2", Name: "Inverter 2 (20 kW)", Profile: "sunspec-inverter", Role: plant.RolePVInverter, BusID: "sim", UnitID: UnitInverter2, Enabled: true},
+	}
+	if s.scenario == ScenarioATS {
+		bit := uint8(0)
+		site.Devices[0] = plant.DeviceConfig{
+			ID: "meter1", Name: "Main meter (grid / genset)", Profile: "eastron-sdm630", Role: plant.RoleSourceMeter,
+			BusID: "sim", UnitID: UnitATSMeter, Enabled: true, RatedW: 100000, MinLoadW: 25000,
+			RunningSignal: &devices.Register{Table: devices.TableHolding, Address: ATSRunningRegister, Type: devices.TypeUint16, Bit: &bit},
+		}
 	}
 	if s.scenario == ScenarioHybrid {
 		site.Devices = append(site.Devices, plant.DeviceConfig{

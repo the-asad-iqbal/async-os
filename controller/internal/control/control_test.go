@@ -437,3 +437,47 @@ func TestSettingsJSONFillsNewFieldsWithDefaults(t *testing.T) {
 		t.Fatal("unknown field accepted")
 	}
 }
+
+func TestSourceMeterFollowsATS(t *testing.T) {
+	s := controlSettings()
+	s.ExportLimitW = 1000
+	var st State
+	step := func(sec float64, powerW float64, running bool) Decision {
+		now := t0.Add(time.Duration(sec * float64(time.Second)))
+		src := &SourceMeter{Meter: Meter{ID: "meter1", Online: true, Updated: now, PowerW: powerW, VoltageV: 230, HasVoltage: true},
+			RatedW: 100000, MinLoadW: 25000, GensetRunning: running}
+		return Step(s, Measurements{Now: now, Source: src, Inverters: []Inverter{inverter("inv", 30000, 60000, now)}}, &st)
+	}
+
+	// On grid: export limit applies. Exporting 500 W, limit 1000, margin 200.
+	d := step(0, -500, false)
+	if d.Source != "grid" || d.Binding != "grid" || d.HeadroomW != 300 {
+		t.Fatalf("grid mode = %+v", d)
+	}
+	// A one-second flicker of the signal is ignored.
+	if d = step(1, -500, true); d.Source != "grid" {
+		t.Fatal("followed a flicker")
+	}
+	step(1.5, -500, false)
+	// The ATS transfers; after the debounce the meter is the genset.
+	step(2, 40000, true)
+	step(3, 40000, true)
+	d = step(4.5, 40000, true)
+	if d.Source != "genset" || d.Binding != "genset" || d.GensetsRunning != 1 || d.GensetMinLoadW != 25000 {
+		t.Fatalf("genset mode = %+v", d)
+	}
+	// 40 kW - 25 kW floor - 500 W margin.
+	if d.HeadroomW != 14500 {
+		t.Fatalf("headroom = %v", d.HeadroomW)
+	}
+}
+
+func TestSourceMeterOfflineTriggersFailsafe(t *testing.T) {
+	s := controlSettings()
+	var st State
+	src := &SourceMeter{Meter: Meter{ID: "meter1", Online: false, Updated: t0}, RatedW: 100000}
+	d := Step(s, Measurements{Now: t0, Source: src, Inverters: []Inverter{inverter("inv", 30000, 60000, t0)}}, &st)
+	if d.Status != StatusFailsafe || d.Source != "" {
+		t.Fatalf("decision = %+v", d)
+	}
+}

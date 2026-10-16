@@ -13,6 +13,7 @@ const transports = [
 const roles = [
   { value: 'grid_meter', label: 'Grid meter', kind: 'meter' },
   { value: 'genset_meter', label: 'Genset meter', kind: 'meter' },
+  { value: 'source_meter', label: 'Grid / genset meter (ATS)', kind: 'meter' },
   { value: 'pv_inverter', label: 'PV inverter', kind: 'inverter' },
 ];
 
@@ -191,10 +192,11 @@ export async function render(main) {
     const role = select('role', roles, d.role);
     const profile = h('select', { name: 'profile', required: true });
     const notes = h('p', { class: 'muted small', style: { margin: 0 } });
+    const sigAddress = numberInput('sig_address', d.running_signal?.address ?? '', { min: 0, max: 65535, step: 1, required: false });
     const gensetFields = h('div', { class: 'form-grid' },
       field(h('span', {}, 'Minimum load ', info('Optional. Overrides the site-wide percentage for this genset.')), numberInput('min_load_kw', d.min_load_w ? d.min_load_w / 1000 : '', { min: 0, step: 0.5, required: false }), { unit: 'kW' }),
       field(h('span', {}, 'Running signal register ', info('Optional. A register on this device that reports the genset running, e.g. a digital input wired to the genset or ATS. Leave empty to infer from power.')),
-        numberInput('sig_address', d.running_signal?.address ?? '', { min: 0, max: 65535, step: 1, required: false })),
+        sigAddress),
       field('Signal table', select('sig_table', [{ value: 'holding', label: 'Holding' }, { value: 'input', label: 'Input' }], d.running_signal?.table || 'holding')),
       field('Signal bit', numberInput('sig_bit', d.running_signal?.bit ?? 0, { min: 0, max: 15, step: 1, required: false })));
     const ratingHint = h('small');
@@ -203,8 +205,12 @@ export async function render(main) {
     const syncRole = () => {
       const kind = roles.find((r) => r.value === role.value).kind;
       replace(profile, profileOptions(kind).map((g) => h('optgroup', { label: g.group }, g.options.map((o) => h('option', { value: o.value, selected: o.value === d.profile }, o.label)))));
-      gensetFields.hidden = role.value !== 'genset_meter';
-      ratingHint.textContent = role.value === 'genset_meter' ? 'Required: the genset’s rated active power.' : 'Only needed if the inverter does not report its rating.';
+      const genset = role.value === 'genset_meter' || role.value === 'source_meter';
+      gensetFields.hidden = !genset;
+      sigAddress.required = role.value === 'source_meter';
+      ratingHint.textContent = role.value === 'source_meter'
+        ? 'Required: the genset’s rated active power. This meter sees the grid or the genset; the running signal says which, and its energy is split into grid and genset totals.'
+        : genset ? 'Required: the genset’s rated active power.' : 'Only needed if the inverter does not report its rating.';
       syncProfile();
     };
     const syncProfile = () => {
@@ -221,7 +227,7 @@ export async function render(main) {
         invert_power: f.invert_power.checked, rated_w: f.rated_kw.value ? Math.round(Number(f.rated_kw.value) * 1000) : 0,
         poll_interval_ms: Number(f.poll_interval_ms.value) || 0,
       };
-      if (out.role === 'genset_meter') {
+      if (out.role === 'genset_meter' || out.role === 'source_meter') {
         if (f.min_load_kw.value) out.min_load_w = Math.round(Number(f.min_load_kw.value) * 1000);
         if (f.sig_address.value !== '') out.running_signal = { table: f.sig_table.value, address: Number(f.sig_address.value), type: 'uint16', bit: Number(f.sig_bit.value || 0) };
       }
@@ -272,7 +278,8 @@ export async function render(main) {
       onSubmit: (f) => {
         const dev = readDevice(f);
         if (draft.devices.some((x, j) => x.id === dev.id && j !== i)) throw new Error('Another device already uses this ID.');
-        if (dev.role === 'genset_meter' && !dev.rated_w) throw new Error('Enter the genset rating.');
+        if ((dev.role === 'genset_meter' || dev.role === 'source_meter') && !dev.rated_w) throw new Error('Enter the genset rating.');
+        if (dev.role === 'source_meter' && !dev.running_signal) throw new Error('An ATS meter needs the genset running signal.');
         if (i >= 0) draft.devices[i] = dev; else draft.devices.push(dev);
         markDirty();
         renderBuses();

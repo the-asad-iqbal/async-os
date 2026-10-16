@@ -22,6 +22,7 @@ import (
 	"github.com/the-asad-iqbal/async-os/controller/internal/audit"
 	"github.com/the-asad-iqbal/async-os/controller/internal/auth"
 	"github.com/the-asad-iqbal/async-os/controller/internal/devices"
+	"github.com/the-asad-iqbal/async-os/controller/internal/energy"
 	"github.com/the-asad-iqbal/async-os/controller/internal/plant"
 	"github.com/the-asad-iqbal/async-os/controller/internal/sim"
 	"github.com/the-asad-iqbal/async-os/controller/internal/stats"
@@ -38,7 +39,7 @@ func main() {
 	listen := flag.String("listen", ":80", "HTTP listen address")
 	dataDir := flag.String("data", "/var/lib/asyncos", "directory for the database and setup code")
 	profilesDir := flag.String("profiles", "", "extra device profiles (default <data>/profiles)")
-	demo := flag.String("demo", "", `run against a simulated site: "grid" or "hybrid"`)
+	demo := flag.String("demo", "", `run against a simulated site: "grid", "hybrid" or "ats"`)
 	localDisplay := flag.Bool("local-display", false, "give the device's own kiosk screen (loopback, no session) read-only access")
 	rebootRequest := flag.String("reboot-request", "", "request reboots by creating this file (watched by a privileged unit) instead of calling systemctl")
 	debug := flag.Bool("debug", false, "verbose logging")
@@ -107,6 +108,26 @@ func run(log *slog.Logger, listen, dataDir, profilesDir, demo string, localDispl
 	engine, err := plant.NewEngine(lib, site, log)
 	if err != nil {
 		return fmt.Errorf("site configuration: %w", err)
+	}
+	// Grid/genset meter totals survive restarts.
+	totalsKey := []byte("source_totals")
+	engine.LoadTotals = func(id string) energy.Totals {
+		saved := map[string]energy.Totals{}
+		_ = db.View(func(tx *bolt.Tx) error { return store.GetJSON(tx, store.BucketMeta, totalsKey, &saved) })
+		return saved[id]
+	}
+	engine.SaveTotals = func(totals map[string]energy.Totals) {
+		err := db.Update(func(tx *bolt.Tx) error {
+			saved := map[string]energy.Totals{}
+			_ = store.GetJSON(tx, store.BucketMeta, totalsKey, &saved)
+			for id, t := range totals {
+				saved[id] = t
+			}
+			return store.PutJSON(tx, store.BucketMeta, totalsKey, saved)
+		})
+		if err != nil {
+			log.Error("saving grid/genset totals failed", "error", err)
+		}
 	}
 	recorder := stats.NewRecorder(db, log)
 	engine.OnSnapshot = recorder.Observe

@@ -20,6 +20,10 @@ type Role string
 const (
 	RoleGridMeter   Role = "grid_meter"
 	RoleGensetMeter Role = "genset_meter"
+	// RoleSourceMeter is one meter fed by the grid or, through an ATS, a
+	// genset. Its running signal says which; its energy is split into
+	// grid and genset totals.
+	RoleSourceMeter Role = "source_meter"
 	RolePVInverter  Role = "pv_inverter"
 )
 
@@ -176,17 +180,21 @@ func (s *Site) Validate(lib *devices.Library) error {
 			errs = append(errs, fmt.Errorf("device %q: rating cannot be negative", d.ID))
 		}
 		switch d.Role {
-		case RoleGridMeter, RoleGensetMeter:
+		case RoleGridMeter, RoleGensetMeter, RoleSourceMeter:
 			if profile.Kind != devices.KindMeter {
 				errs = append(errs, fmt.Errorf("device %q: role %s needs a meter profile", d.ID, d.Role))
 			}
-			if d.Role == RoleGridMeter && d.Enabled {
+			if (d.Role == RoleGridMeter || d.Role == RoleSourceMeter) && d.Enabled {
 				gridMeters++
 			}
-			if d.Role == RoleGensetMeter && d.RatedW <= 0 {
+			isGenset := d.Role == RoleGensetMeter || d.Role == RoleSourceMeter
+			if isGenset && d.RatedW <= 0 {
 				errs = append(errs, fmt.Errorf("device %q: genset rating is required", d.ID))
 			}
-			if d.Role == RoleGensetMeter && (d.MinLoadW < 0 || (d.RatedW > 0 && d.MinLoadW >= d.RatedW)) {
+			if d.Role == RoleSourceMeter && d.RunningSignal == nil {
+				errs = append(errs, fmt.Errorf("device %q: a grid/genset meter needs the genset running signal to tell its sources apart", d.ID))
+			}
+			if isGenset && (d.MinLoadW < 0 || (d.RatedW > 0 && d.MinLoadW >= d.RatedW)) {
 				errs = append(errs, fmt.Errorf("device %q: minimum load must be below the genset rating", d.ID))
 			}
 		case RolePVInverter:
@@ -214,7 +222,7 @@ func (s *Site) Validate(lib *devices.Library) error {
 		}
 	}
 	if gridMeters > 1 {
-		errs = append(errs, errors.New("only one grid meter can be enabled"))
+		errs = append(errs, errors.New("only one grid meter or grid/genset meter can be enabled"))
 	}
 	return errors.Join(errs...)
 }

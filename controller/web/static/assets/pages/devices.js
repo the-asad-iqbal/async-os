@@ -4,7 +4,7 @@ import * as live from '../lib/live.js';
 import * as fmt from '../lib/format.js';
 import { emptyState, pageHead, pill } from '../lib/ui.js';
 
-const roleLabels = { grid_meter: 'Grid meter', genset_meter: 'Genset meter', pv_inverter: 'PV inverter' };
+const roleLabels = { grid_meter: 'Grid meter', genset_meter: 'Genset meter', source_meter: 'Grid / genset meter (ATS)', pv_inverter: 'PV inverter' };
 
 const readingLabels = [
   ['power', 'Power', (v) => fmt.powerText(v)],
@@ -38,6 +38,16 @@ export async function render(main, { can, navigate }) {
   return unsubscribe;
 }
 
+/** The ATS meter's energy, split by source. */
+function sourceTotals(t) {
+  const kwh = (v) => `${fmt.number(v, v < 100 ? 2 : 0)} kWh`;
+  return h('div', { class: 'stack', style: { gap: '6px', marginTop: '8px' } },
+    h('small', { class: 'muted', 'data-tip': 'Counter increments go to the source that was live. While the genset runs, live power is integrated and tops up anything the counters missed.' }, 'Energy by source'),
+    h('div', { class: 'readings' },
+      [['Grid import', t.grid_import_kwh], ['Grid export', t.grid_export_kwh], ['Genset output', t.genset_import_kwh], ['Genset reverse', t.genset_export_kwh]]
+        .map(([label, v]) => h('div', {}, h('small', {}, label), h('b', {}, kwh(v ?? 0))))));
+}
+
 function deviceCard(d) {
   const state = !d.enabled ? pill('Disabled', 'plain') : d.online ? pill('Online', 'ok') : pill('Offline', 'danger');
   const readings = readingLabels.filter(([key]) => d.reading?.[key] != null).slice(0, 9);
@@ -49,11 +59,13 @@ function deviceCard(d) {
       d.verified
         ? pill('Verified profile', 'ok')
         : h('span', { class: 'pill warn', 'data-tip': 'This register map has not been checked against real hardware yet. Compare readings with the device display during commissioning.' }, 'Unverified profile'),
+      d.role === 'source_meter' && d.source && (d.source === 'genset' ? pill('On genset', 'warn') : pill('On grid', 'info')),
       d.role === 'pv_inverter' && (d.controllable ? pill('Controllable', 'info') : pill('Read only', 'plain')),
       d.rated_w ? h('span', { class: 'muted small' }, `Rated ${fmt.powerText(d.rated_w)}`) : null),
     readings.length
       ? h('div', { class: 'readings' }, readings.map(([key, label, f]) => h('div', {}, h('small', {}, label), h('b', {}, f(d.reading[key])))))
       : h('p', { class: 'muted small' }, d.enabled ? 'No readings yet.' : 'This device is disabled.'),
+    d.source_totals && sourceTotals(d.source_totals),
     (d.error || d.write_error || d.limit_pct != null) && h('div', { class: 'card-foot' },
       d.error ? h('span', { class: 'error-text' }, d.error)
         : d.write_error ? h('span', { class: 'error-text' }, `Limit write failed: ${d.write_error}`)

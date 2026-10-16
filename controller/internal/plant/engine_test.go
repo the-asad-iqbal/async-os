@@ -135,3 +135,38 @@ func TestEngineProtectsGensetDuringOutage(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 	}
 }
+
+func TestEngineSplitsATSMeterEnergy(t *testing.T) {
+	site, engine, _ := startSite(t, sim.ScenarioATS)
+	site.SetGridCycle(4*time.Second, 6*time.Second)
+
+	var meter plant.DeviceStatus
+	find := func() bool {
+		for _, d := range engine.Snapshot().Devices {
+			if d.ID == "meter1" {
+				meter = d
+				return true
+			}
+		}
+		return false
+	}
+	// On genset the meter becomes the genset: the floor binds and the
+	// genset never drops far below 25 kW.
+	waitFor(t, 15*time.Second, "genset window", func() bool { return find() && meter.Source == "genset" })
+	time.Sleep(3 * time.Second)
+	s := engine.Snapshot()
+	if s.GensetW == nil || *s.GensetW < 25000-3000 || s.GridW != nil {
+		t.Fatalf("genset mode: genset=%v grid=%v decision=%+v", s.GensetW, s.GridW, s.Decision)
+	}
+
+	// Back on grid, the genset window closes and its energy, invisible
+	// to the frozen counters, is recovered from live power.
+	waitFor(t, 15*time.Second, "grid again", func() bool { return find() && meter.Source == "grid" })
+	waitFor(t, 5*time.Second, "split totals", func() bool {
+		find()
+		return meter.SourceTotals != nil && meter.SourceTotals.GensetImportKWh > 0.01 && meter.SourceTotals.GridImportKWh > 0
+	})
+	if got := engine.Totals()["meter1"]; got.GensetImportKWh <= 0 {
+		t.Fatalf("totals = %+v", got)
+	}
+}

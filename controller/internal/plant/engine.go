@@ -11,6 +11,7 @@ import (
 
 	"github.com/the-asad-iqbal/async-os/controller/internal/control"
 	"github.com/the-asad-iqbal/async-os/controller/internal/devices"
+	"github.com/the-asad-iqbal/async-os/controller/internal/energy"
 	"github.com/the-asad-iqbal/async-os/controller/internal/modbus"
 )
 
@@ -32,6 +33,9 @@ type DeviceStatus struct {
 	Controllable bool            `json:"controllable"`
 	LimitPct     *float64        `json:"limit_pct,omitempty"`
 	WriteError   string          `json:"write_error,omitempty"`
+	// Grid/genset meters: what feeds the meter now, and its split totals.
+	Source       string         `json:"source,omitempty"`
+	SourceTotals *energy.Totals `json:"source_totals,omitempty"`
 }
 
 // Snapshot is the live state of the site, published every control cycle.
@@ -77,7 +81,23 @@ type Engine struct {
 	subs   map[chan Snapshot]struct{}
 	// OnSnapshot, if set, sees every snapshot (statistics, logging).
 	OnSnapshot func(Snapshot)
+	// LoadTotals and SaveTotals persist grid/genset meter totals. Set
+	// them before Run.
+	LoadTotals func(deviceID string) energy.Totals
+	SaveTotals func(map[string]energy.Totals)
+
+	splitters map[string]*splitter
+	savedAt   time.Time
 }
+
+// splitter tracks one grid/genset meter's energy.
+type splitter struct {
+	s        *energy.Splitter
+	observed time.Time
+}
+
+// totalsSaveInterval bounds how much split energy a power cut can lose.
+const totalsSaveInterval = 30 * time.Second
 
 type runner struct {
 	cfg    DeviceConfig
@@ -107,6 +127,7 @@ func NewEngine(lib *devices.Library, site Site, log *slog.Logger) (*Engine, erro
 		clients:   map[string]*modbus.Client{},
 		wasOnline: map[string]bool{},
 		subs:      map[chan Snapshot]struct{}{},
+		splitters: map[string]*splitter{},
 	}, nil
 }
 
@@ -188,6 +209,13 @@ func (e *Engine) startLocked() {
 			if cfg.RunningSignal != nil {
 				r.device.AddPoints(map[string]devices.Register{devices.PointRunning: *cfg.RunningSignal})
 			}
+			if cfg.Role == RoleSourceMeter && e.splitters[cfg.ID] == nil {
+				totals := energy.Totals{}
+				if e.LoadTotals != nil {
+					totals = e.LoadTotals(cfg.ID)
+				}
+				e.splitters[cfg.ID] = &splitter{s: energy.NewSplitter(totals)}
+			}
 			e.pollers.Add(1)
 			go func() {
 				defer e.pollers.Done()
@@ -196,9 +224,21 @@ func (e *Engine) startLocked() {
 		}
 		e.runners = append(e.runners, r)
 	}
+	// Forget splitters of devices that are no longer grid/genset meters.
+	// Their totals were saved by stopLocked.
+	for id := range e.splitters {
+		keep := false
+		for _, cfg := range e.site.Devices {
+			keep = keep || (cfg.ID == id && cfg.Role == RoleSourceMeter && cfg.Enabled)
+		}
+		if !keep {
+			delete(e.splitters, id)
+		}
+	}
 }
 
 func (e *Engine) stopLocked() {
+	e.saveTotalsLocked()
 	if e.stopPollers != nil {
 		e.stopPollers()
 		e.pollers.Wait()
@@ -335,6 +375,32 @@ func (e *Engine) cycle(ctx context.Context) {
 		}
 
 		switch r.cfg.Role {
+		case RoleSourceMeter:
+			status.RatedW = r.cfg.RatedW
+			running, hasSignal := reading[devices.PointRunning]
+			// Without its running signal the meter's source is unknown,
+			// which the control loop must treat as missing data.
+			m.Source = &control.SourceMeter{
+				Meter:         meterFor(r.cfg.ID, online && hasSignal, updated, power, reading),
+				RatedW:        r.cfg.RatedW,
+				MinLoadW:      r.cfg.MinLoadW,
+				GensetRunning: running != 0,
+			}
+			if sp := e.splitters[r.cfg.ID]; sp != nil {
+				if online && hasSignal && updated.After(sp.observed) {
+					sp.observed = updated
+					sample := energy.Sample{Time: updated, GensetRunning: running != 0, PowerW: &power}
+					if v, ok := reading[devices.PointEnergyImport]; ok {
+						sample.ImportKWh = &v
+					}
+					if v, ok := reading[devices.PointEnergyExport]; ok {
+						sample.ExportKWh = &v
+					}
+					sp.s.Observe(sample)
+				}
+				totals := sp.s.Totals()
+				status.SourceTotals = &totals
+			}
 		case RoleGridMeter:
 			meter := meterFor(r.cfg.ID, online, updated, power, reading)
 			m.Grid = &meter
@@ -373,6 +439,14 @@ func (e *Engine) cycle(ctx context.Context) {
 	}
 
 	decision := control.Step(site.Control, m, &e.state)
+	for i := range statuses {
+		if statuses[i].Role == RoleSourceMeter {
+			statuses[i].Source = decision.Source
+		}
+	}
+	if now.Sub(e.savedAt) >= totalsSaveInterval {
+		e.saveTotalsLocked()
+	}
 	e.mu.Unlock()
 
 	if decision.Send && len(inverters) > 0 {
@@ -413,6 +487,29 @@ func (e *Engine) cycle(ctx context.Context) {
 	e.publish(e.snapshot(now, site, m, decision, statuses))
 }
 
+func (e *Engine) saveTotalsLocked() {
+	if e.SaveTotals == nil || len(e.splitters) == 0 {
+		return
+	}
+	out := make(map[string]energy.Totals, len(e.splitters))
+	for id, sp := range e.splitters {
+		out[id] = sp.s.Totals()
+	}
+	e.SaveTotals(out)
+	e.savedAt = e.now()
+}
+
+// Totals returns the split energy totals of every grid/genset meter.
+func (e *Engine) Totals() map[string]energy.Totals {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	out := make(map[string]energy.Totals, len(e.splitters))
+	for id, sp := range e.splitters {
+		out[id] = sp.s.Totals()
+	}
+	return out
+}
+
 // maxVoltage returns the highest phase voltage, and whether the meter
 // measures voltage at all.
 func maxVoltage(r devices.Reading) (float64, bool) {
@@ -442,6 +539,21 @@ func (e *Engine) snapshot(now time.Time, site Site, m control.Measurements, d co
 
 	load := s.PVW
 	complete := true
+	if src := m.Source; src != nil {
+		// The ATS meter reports whichever source feeds the site.
+		switch {
+		case !fresh(src.Online, src.Updated):
+			complete = false
+		case d.Source == "genset":
+			g := src.PowerW
+			s.GensetW = &g
+			load += g
+		default:
+			g := src.PowerW
+			s.GridW = &g
+			load += g
+		}
+	}
 	if m.Grid != nil {
 		if fresh(m.Grid.Online, m.Grid.Updated) {
 			g := m.Grid.PowerW
@@ -460,8 +572,12 @@ func (e *Engine) snapshot(now time.Time, site Site, m control.Measurements, d co
 				complete = false
 			}
 		}
-		s.GensetW = &total
 		load += total
+		// Add to a genset fed through the ATS meter, if any.
+		if s.GensetW != nil {
+			total += *s.GensetW
+		}
+		s.GensetW = &total
 	}
 	for _, inv := range m.Inverters {
 		if !fresh(inv.Online, inv.Updated) {
