@@ -1,0 +1,103 @@
+#!/bin/sh
+# ==============================================================================
+# AsyncOS console banner: logo, system status and where to reach the device
+#
+# Usage: asyncos-banner [--repl]
+#   --repl  add the hint for the interactive CLI shown on the device console
+# ==============================================================================
+# shellcheck disable=SC1091
+. /usr/lib/os-release
+
+# Brand palette, see branding/colors.json "terminal"
+P='\033[1;38;5;63m'  # indigo
+A='\033[1;38;5;45m'  # pulse
+W='\033[1;97m'
+M='\033[38;5;245m'
+OK='\033[1;32m'
+WARN='\033[1;33m'
+R='\033[0m'
+
+DEFAULT_CORE_PORT=8123
+
+hostname="$(cat /proc/sys/kernel/hostname)"
+
+logo() {
+    printf '%b\n' "" \
+    "${P}       ${R}  ${W} ███                             ${R}  ${P} ███    ████${R}" \
+    "${P} ▄▀ ▀▄ ${R}  ${W}█   █   ████  █   █  ████    ████${R}  ${P}█   █  █    ${R}" \
+    "${P}▄▀ ${A}■${P} ▀▄${R}  ${W}█████  ███     █ █   █   █  █    ${R}  ${P}█   █   ███ ${R}" \
+    "${P}▀     ▀${R}  ${W}█   █    ███    █    █   █  █    ${R}  ${P}█   █      █${R}" \
+    "${P}       ${R}  ${W}█   █  ████     █    █   █   ████${R}  ${P} ███   ████ ${R}" \
+    ""
+}
+
+row() {
+    printf "  %b%-12s%b%b\n" "${M}" "$1" "${R}" "$2"
+}
+
+status() {
+    case "$(systemctl is-system-running 2>/dev/null)" in
+        running) echo "${OK}●${R} Running" ;;
+        starting|initializing) echo "${WARN}●${R} Starting" ;;
+        degraded) echo "${WARN}●${R} Degraded ${M}(see 'systemctl --failed')${R}" ;;
+        *) echo "${WARN}●${R} Unknown" ;;
+    esac
+}
+
+# Addresses on physical and user-configured links, without container bridges
+addresses() {
+    ip -j "-$1" addr show scope global 2>/dev/null | jq -r '
+        .[]
+        | select(.ifname | test("^(docker|hassio|veth|lo)") | not)
+        | .ifname as $ifname
+        | .addr_info[]
+        | "\(.local)/\(.prefixlen) \u001b[38;5;245m(\($ifname))\u001b[0m"'
+}
+
+# Same URL rules as the Home Assistant CLI: mDNS name, default port omitted
+dashboard_url() {
+    core="$(timeout 5 docker exec hassio_cli ha core info --raw-json 2>/dev/null)"
+    port="$(echo "${core}" | jq -r '.data.port // empty' 2>/dev/null)"
+    ssl="$(echo "${core}" | jq -r '.data.ssl // false' 2>/dev/null)"
+
+    protocol=http
+    default_port=80
+    if [ "${ssl}" = "true" ]; then
+        protocol=https
+        default_port=443
+    fi
+
+    url="${protocol}://${hostname}.local"
+    port="${port:-${DEFAULT_CORE_PORT}}"
+    if [ "${port}" != "${default_port}" ]; then
+        url="${url}:${port}"
+    fi
+    echo "${url}"
+}
+
+print_addresses() {
+    label="$1"
+    list="$(addresses "$2")"
+    if [ -z "${list}" ]; then
+        if [ "$2" = 4 ]; then
+            row "${label}" "${M}No address${R}"
+        fi
+        return
+    fi
+    echo "${list}" | while IFS= read -r address; do
+        row "${label}" "${address}"
+        label=""
+    done
+}
+
+logo
+printf "%b%s%b %b%s · %s%b\n\n" "${W}" "${NAME}" "${R}" "${M}" "${VERSION_ID}" "${VARIANT#"${NAME} "}" "${R}"
+row "Status" "$(status)"
+row "Hostname" "${hostname}"
+print_addresses "IPv4" 4
+print_addresses "IPv6" 6
+row "Dashboard" "${A}$(dashboard_url)${R}"
+if [ "$1" = "--repl" ]; then
+    printf "\n%bType%b help %bfor commands,%b login %bfor a root shell.%b\n" "${M}" "${R}" "${M}" "${R}" "${M}" "${R}"
+fi
+printf "\n"

@@ -21,7 +21,7 @@ emergency_shell() {
 
 trap interrupt INT
 
-printf "Waiting for the AsyncOS CLI to be ready..."
+printf "Starting AsyncOS..."
 
 i=0
 while [ ! "$(docker ps -q -f name=hassio_cli)" ]; do
@@ -40,9 +40,21 @@ while [ ! "$(docker ps -q -f name=hassio_cli)" ]; do
     fi
 done
 
-docker container exec \
-    -ti hassio_cli \
-    /usr/bin/cli.sh
+# Replace the "Starting" line with the AsyncOS banner
+printf "\r\033[K"
+/usr/libexec/asyncos-banner --repl
+
+# Enter the CLI's interactive shell directly so its own banner is skipped.
+# Older CLI images have no rcfile; they get their stock entrypoint.
+if docker container exec hassio_cli test -f /etc/ha-cli/.repl_rc; then
+    docker container exec \
+        -ti hassio_cli \
+        bash --noprofile --rcfile /etc/ha-cli/.repl_rc -i
+else
+    docker container exec \
+        -ti hassio_cli \
+        /usr/bin/cli.sh
+fi
 
 case $? in
   10)
